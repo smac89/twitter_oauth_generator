@@ -332,8 +332,10 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
             (void) strcpy( authorization, "&" );
         for ( i = 0; i < n_proto_params; ++i )
         {
-            if ( i > 0 )
+            if ( i > 0 ) {
                 (void) strcat( authorization, "&" );
+            }
+
             (void) strcat( authorization, proto_params[i].encoded_name );
             (void) strcat( authorization, "=" );
             (void) strcat( authorization, proto_params[i].encoded_value );
@@ -349,8 +351,10 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
         (void) strcpy( authorization, "OAuth " );
         for ( i = 0; i < n_proto_params; ++i )
         {
-            if ( i > 0 )
+            if ( i > 0 ) {
                 (void) strcat( authorization, ", " );
+            }
+
             (void) strcat( authorization, proto_params[i].encoded_name );
             (void) strcat( authorization, "=\"" );
             (void) strcat( authorization, proto_params[i].encoded_value );
@@ -360,19 +364,20 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
     
     /* Free everything except authorization. */
     free( query_string );
-    for ( i = 0; i < n_query_params; ++i )
-    {
+    
+    for ( i = 0; i < n_query_params; ++i ) {
         free( query_params[i].name );
         free( query_params[i].value );
     }
-    for ( i = 0; i < n_post_params; ++i )
+    for ( i = 0; i < n_post_params; ++i ) {
         free( (void*) post_params[i].name );
+    }
 
-    for ( i = 0; i < n_all_params; ++i )
-    {
+    for ( i = 0; i < n_all_params; ++i ) {
         free( all_params[i].encoded_name );
         free( all_params[i].encoded_value );
     }
+
     free( query_params );
     free( post_params );
     free( proto_params );
