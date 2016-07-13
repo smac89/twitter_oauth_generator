@@ -40,13 +40,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <sysexits.h>
 #include "logger.h"
-// #include "liboauthsign.h"
+#include "liboauthsign.h"
 
 
 static void usage( void );
-static int check_method( const char *method );
+static int check_method( char *method );
 static char* program_name;
 
 int main( int argc, char** argv ) {
@@ -100,38 +101,45 @@ int main( int argc, char** argv ) {
     paramv = &(argv[argn]);
 
     if ( query_mode && paramc > 0 ) {
-    	(void) fprintf( stderr, "%s: -q doesn't work with extra POST parameters\n", program_name );
+        e_log("%s: -q doesn't work with extra POST parameters\n", program_name);
     	exit( EX_USAGE );
 	}
 
-    if ( strcmp( method, "GET" ) != 0 && strcmp( method, "HEAD" ) != 0 && strcmp( method, "POST" ) != 0 ) {
-    	(void) fprintf( stderr, "%s: method must be GET, HEAD, or POST\n", program_name );
-    	exit( EX_USAGE );
+    if (check_method(method) != 1) {
+        e_log( "%s: method must be GET, POST, DELETE, PUT, or HEAD\n", program_name );
+        exit( EX_USAGE );
+    }
+
+    if ( show_sbs )
+    	oauth_show_sbs();
+        result = oauth_sign( query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc, paramv );
+
+    if ( result == (char*) 0 ) {
+    	(void) fprintf( stderr, "%s: signing failed\n", program_name );
+    	exit( EX_SOFTWARE );
 	}
 
- //    if ( show_sbs )
- //    	oauth_show_sbs();
- //        result = oauth_sign( query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc, paramv );
-
- //    if ( result == (char*) 0 ) {
- //    	(void) fprintf( stderr, "%s: signing failed\n", program_name );
- //    	exit( EX_SOFTWARE );
-	// }
-
- //    (void) printf( "%s\n", result );
- //    free( result );
+    (void) printf( "%s\n", result );
+    free( result );
 
     exit( EX_OK );
 }
 
-static void check_method( const char *method ) {
+static int check_method( char *method ) {
     static const char* methods[] = {
         "GET", "POST", "DELETE",
         "PUT", "HEAD"
     };
 
     int valid = 0, size = sizeof methods, cnt = 0;
-    char *mptr = NULL;
+    char *up = method;
+    const char *mptr = NULL;
+
+    while (*up) {
+        *up = toupper(*up);
+        ++up;
+    }
+
     for (mptr = methods[cnt++]; cnt < size; mptr = methods[cnt++]) {
         if (strcmp(method, mptr) == 0) {
             valid = 1;
@@ -139,81 +147,78 @@ static void check_method( const char *method ) {
         }
     }
 
-    if (valid != 1) {
-        e_log()
-        (void) fprintf( stderr, "%s: -q doesn't work with extra POST parameters\n", program_name );
-        exit( EX_USAGE );
-    }
-
     return valid;
 }
 
 static void usage( void ) {
-    (void) fprintf( stderr, "usage:  %s [-q|-b] consumer_key consumer_key_secret token token_secret method url [name=value ...]\n", program_name );
+    e_log( "usage:  %s [-q|-b] "
+        "<consumer_key> <consumer_key_secret> "
+        "<token> <token_secret> <method< <url> "
+        "[name=value ...]\n", program_name );
     exit( EX_USAGE );
 }
 
-// char *b64 = malloc(bptr->length);
-// snprintf(format, sizeof format, "%%.%zus", bptr->length)
-// 
-// #include <openssl/rand.h>
-// #include <openssl/bio.h>
-// #include <openssl/evp.h>
-// #include <openssl/buffer.h>
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
+/*char *b64 = malloc(bptr->length);
+snprintf(format, sizeof format, "%%.%zus", bptr->length)
 
-// static BUF_MEM*
-// base64_bytes(int size) {
-//     char *buf = malloc(size + 1), format[20];
-//     int chunk;
-//     BIO *b64, *out;
-//     BUF_MEM *bptr;
+#include <openssl/rand.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/buffer.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-//     // Create a base64 filter/sink
-//     if ((b64 = BIO_new(BIO_f_base64())) == NULL) {
-//         return NULL;
-//     }
+static BUF_MEM*
+base64_bytes(int size) {
+    char *buf = malloc(size + 1), format[20];
+    int chunk;
+    BIO *b64, *out;
+    BUF_MEM *bptr;
 
-//     // Create a memory source
-//     if ((out = BIO_new(BIO_s_mem())) == NULL) {
-//         return NULL;
-//     }
+    // Create a base64 filter/sink
+    if ((b64 = BIO_new(BIO_f_base64())) == NULL) {
+        return NULL;
+    }
 
-//     // Chain them
-//     out = BIO_push(b64, out);
-//     //Ignore newlines - write everything in one line
-//     BIO_set_flags(out, BIO_FLAGS_BASE64_NO_NL);
+    // Create a memory source
+    if ((out = BIO_new(BIO_s_mem())) == NULL) {
+        return NULL;
+    }
 
-//     // Generate random bytes
-//     if (!RAND_bytes(buf, size)) {
-//         return NULL;
-//     }
+    // Chain them
+    out = BIO_push(b64, out);
+    //Ignore newlines - write everything in one line
+    BIO_set_flags(out, BIO_FLAGS_BASE64_NO_NL);
 
-//     BIO_write(out, buf, size);
-//     BIO_flush(out);
-//     BIO_get_mem_ptr(out, &bptr);
-//     BIO_set_close(out, BIO_NOCLOSE);
-//     BIO_free_all(out);
+    // Generate random bytes
+    if (!RAND_bytes(buf, size)) {
+        return NULL;
+    }
 
-//     return bptr;
-// }
+    BIO_write(out, buf, size);
+    BIO_flush(out);
+    BIO_get_mem_ptr(out, &bptr);
+    BIO_set_close(out, BIO_NOCLOSE);
+    BIO_free_all(out);
 
-// int main() {
-//     BUF_MEM *mem = base64_bytes(32);
-//     if (mem != NULL) {
-//         char format[100];
-//         snprintf(format, sizeof format, "The size is %1$zu\n%%.%1$zus\n\n", mem->length);
-//         printf(format, mem->data);
-//     }
+    return bptr;
+}
+
+int main() {
+    BUF_MEM *mem = base64_bytes(32);
+    if (mem != NULL) {
+        char format[100];
+        snprintf(format, sizeof format, "The size is %1$zu\n%%.%1$zus\n\n", mem->length);
+        printf(format, mem->data);
+    }
     
-//     // unsigned char buffer[33] = {}, *base64EncodeOutput;
-//     // int ret = RAND_bytes(buffer, sizeof buffer);
+    // unsigned char buffer[33] = {}, *base64EncodeOutput;
+    // int ret = RAND_bytes(buffer, sizeof buffer);
 
-//     // (void)Base64Encode(buffer, &base64EncodeOutput);
-//     // (void)printf("Return value of the operation was: %d\n%45s\n", ret, base64EncodeOutput);
+    // (void)Base64Encode(buffer, &base64EncodeOutput);
+    // (void)printf("Return value of the operation was: %d\n%45s\n", ret, base64EncodeOutput);
 
 
-//     return EXIT_SUCCESS;
-// }
+    return EXIT_SUCCESS;
+}*/

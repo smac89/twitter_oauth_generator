@@ -386,172 +386,172 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
     return authorization;
 }
     
-    static void
-    oauth_nonce(char *buffer, size_t len) {
+static void
+oauth_nonce(char *buffer, size_t len) {
 
-    }
+}
 
-    static char*
-    percent_encode( const char* str )
+static char*
+percent_encode( const char* str )
+{
+    int max_len;
+    char* new_str;
+    const char* cp;
+    char* new_cp;
+    char* ok = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    char to_hexit[] = "0123456789ABCDEF";
+    
+    max_len = strlen( str ) * 3;
+    MALLOC_CHECK_ASSIGN( new_str, max_len + 1, (char*) 0 );
+    for ( cp = str, new_cp = new_str; *cp != '\0'; ++cp )
     {
-        int max_len;
-        char* new_str;
-        const char* cp;
-        char* new_cp;
-        char* ok = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-        char to_hexit[] = "0123456789ABCDEF";
-        
-        max_len = strlen( str ) * 3;
-        MALLOC_CHECK_ASSIGN( new_str, max_len + 1, (char*) 0 );
-        for ( cp = str, new_cp = new_str; *cp != '\0'; ++cp )
+        if ( strchr( ok, *cp ) != (char*) 0 )
+            *new_cp++ = *cp;
+        else
         {
-            if ( strchr( ok, *cp ) != (char*) 0 )
-                *new_cp++ = *cp;
-            else
-            {
-                *new_cp++ = '%';
-                *new_cp++ = to_hexit[ ( (*cp) >> 4 ) & 0xf ];
-                *new_cp++ = to_hexit[ (*cp) & 0xf ];
-            }
+            *new_cp++ = '%';
+            *new_cp++ = to_hexit[ ( (*cp) >> 4 ) & 0xf ];
+            *new_cp++ = to_hexit[ (*cp) & 0xf ];
         }
-        *new_cp = '\0';
-        return new_str;
     }
-    
-    
-    static int
-    compare( const void* v1, const void* v2 )
+    *new_cp = '\0';
+    return new_str;
+}
+
+
+static int
+compare( const void* v1, const void* v2 )
+{
+    const param* p1 = (const param*) v1;
+    const param* p2 = (const param*) v2;
+    int r = strcmp( p1->encoded_name, p2->encoded_name );
+    if ( r == 0 )
+        r = strcmp( p1->encoded_value, p2->encoded_value );
+    return r;
+}
+
+
+/* Copies and decodes a string.  It's ok for from and to to be the
+** same string.
+*/
+static void
+url_decode( char* to, const char* from )
+{
+    for ( ; *from != '\0'; ++to, ++from )
     {
-        const param* p1 = (const param*) v1;
-        const param* p2 = (const param*) v2;
-        int r = strcmp( p1->encoded_name, p2->encoded_name );
-        if ( r == 0 )
-            r = strcmp( p1->encoded_value, p2->encoded_value );
-        return r;
-    }
-    
-    
-    /* Copies and decodes a string.  It's ok for from and to to be the
-    ** same string.
-    */
-    static void
-    url_decode( char* to, const char* from )
-    {
-        for ( ; *from != '\0'; ++to, ++from )
+        if ( from[0] == '%' && isxdigit( from[1] ) && isxdigit( from[2] ) )
         {
-            if ( from[0] == '%' && isxdigit( from[1] ) && isxdigit( from[2] ) )
-            {
-                *to = from_hexit( from[1] ) * 16 + from_hexit( from[2] );
-                from += 2;
-            }
-            else if ( *from == '+' )
-                *to = ' ';
-            else
-                *to = *from;
+            *to = from_hexit( from[1] ) * 16 + from_hexit( from[2] );
+            from += 2;
         }
-        *to = '\0';
+        else if ( *from == '+' )
+            *to = ' ';
+        else
+            *to = *from;
     }
+    *to = '\0';
+}
+
+
+static int
+from_hexit( char c )
+{
+    if ( c >= '0' && c <= '9' )
+        return c - '0';
+    if ( c >= 'a' && c <= 'f' )
+        return c - 'a' + 10;
+    if ( c >= 'A' && c <= 'F' )
+        return c - 'A' + 10;
+    return 0;           /* shouldn't happen, we're guarded by isxdigit() */
+}
+
+
+/* Base-64 encoding.  This encodes binary data as printable ASCII characters.
+** Three 8-bit binary bytes are turned into four 6-bit values, like so:
+**
+**   [11111111]  [22222222]  [33333333]
+**
+**   [111111] [112222] [222233] [333333]
+**
+** Then the 6-bit values are represented using the characters "A-Za-z0-9+/".
+*/
+
+static char b64_encode_table[64] = {
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',  /* 0-7 */
+    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',  /* 8-15 */
+    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',  /* 16-23 */
+    'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',  /* 24-31 */
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',  /* 32-39 */
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',  /* 40-47 */
+    'w', 'x', 'y', 'z', '0', '1', '2', '3',  /* 48-55 */
+    '4', '5', '6', '7', '8', '9', '+', '/'   /* 56-63 */
+};
+
+static int b64_decode_table[256] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 00-0F */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 10-1F */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,  /* 20-2F */
+    52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,  /* 30-3F */
+    -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,  /* 40-4F */
+    15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,  /* 50-5F */
+    -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,  /* 60-6F */
+    41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,  /* 70-7F */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 80-8F */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 90-9F */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* A0-AF */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* B0-BF */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* C0-CF */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* D0-DF */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* E0-EF */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1   /* F0-FF */
+};
+
+/* Do base-64 encoding on a hunk of bytes.  Base-64 encoding takes up
+** 4/3 the space of the original, plus up to 4 bytes for end-padding.
+*/
+static void
+b64_encode( unsigned const char* src, int len, char* dst )
+{
+    int src_idx, dst_idx, phase;
+    char c;
     
-    
-    static int
-    from_hexit( char c )
+    dst_idx = 0;
+    phase = 0;
+    for ( src_idx = 0; src_idx < len; ++src_idx )
     {
-        if ( c >= '0' && c <= '9' )
-            return c - '0';
-        if ( c >= 'a' && c <= 'f' )
-            return c - 'a' + 10;
-        if ( c >= 'A' && c <= 'F' )
-            return c - 'A' + 10;
-        return 0;           /* shouldn't happen, we're guarded by isxdigit() */
-    }
-    
-    
-    /* Base-64 encoding.  This encodes binary data as printable ASCII characters.
-    ** Three 8-bit binary bytes are turned into four 6-bit values, like so:
-    **
-    **   [11111111]  [22222222]  [33333333]
-    **
-    **   [111111] [112222] [222233] [333333]
-    **
-    ** Then the 6-bit values are represented using the characters "A-Za-z0-9+/".
-    */
-    
-    static char b64_encode_table[64] = {
-        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',  /* 0-7 */
-        'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',  /* 8-15 */
-        'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',  /* 16-23 */
-        'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',  /* 24-31 */
-        'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',  /* 32-39 */
-        'o', 'p', 'q', 'r', 's', 't', 'u', 'v',  /* 40-47 */
-        'w', 'x', 'y', 'z', '0', '1', '2', '3',  /* 48-55 */
-        '4', '5', '6', '7', '8', '9', '+', '/'   /* 56-63 */
-    };
-    
-    static int b64_decode_table[256] = {
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 00-0F */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 10-1F */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,  /* 20-2F */
-        52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,  /* 30-3F */
-        -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,  /* 40-4F */
-        15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,  /* 50-5F */
-        -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,  /* 60-6F */
-        41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,  /* 70-7F */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 80-8F */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 90-9F */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* A0-AF */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* B0-BF */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* C0-CF */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* D0-DF */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* E0-EF */
-        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1   /* F0-FF */
-    };
-    
-    /* Do base-64 encoding on a hunk of bytes.  Base-64 encoding takes up
-    ** 4/3 the space of the original, plus up to 4 bytes for end-padding.
-    */
-    static void
-    b64_encode( unsigned const char* src, int len, char* dst )
-    {
-        int src_idx, dst_idx, phase;
-        char c;
-        
-        dst_idx = 0;
-        phase = 0;
-        for ( src_idx = 0; src_idx < len; ++src_idx )
+        switch ( phase )
         {
-            switch ( phase )
-            {
-                case 0:
-                    c = b64_encode_table[src[src_idx] >> 2];
-                    dst[dst_idx++] = c;
-                    c = b64_encode_table[( src[src_idx] & 0x3 ) << 4];
-                    dst[dst_idx++] = c;
-                    ++phase;
-                    break;
-                case 1:
-                    dst[dst_idx - 1] =
-                    b64_encode_table[
-                    b64_decode_table[(int) ((unsigned char) dst[dst_idx - 1])] |
-                    ( src[src_idx] >> 4 ) ];
-                    c = b64_encode_table[( src[src_idx] & 0xf ) << 2];
-                    dst[dst_idx++] = c;
-                    ++phase;
-                    break;
-                case 2:
-                    dst[dst_idx - 1] =
-                    b64_encode_table[
-                    b64_decode_table[(int) ((unsigned char) dst[dst_idx - 1])] |
-                    ( src[src_idx] >> 6 ) ];
-                    c = b64_encode_table[src[src_idx] & 0x3f];
-                    dst[dst_idx++] = c;
-                    phase = 0;
-                    break;
-            }
+            case 0:
+                c = b64_encode_table[src[src_idx] >> 2];
+                dst[dst_idx++] = c;
+                c = b64_encode_table[( src[src_idx] & 0x3 ) << 4];
+                dst[dst_idx++] = c;
+                ++phase;
+                break;
+            case 1:
+                dst[dst_idx - 1] =
+                b64_encode_table[
+                b64_decode_table[(int) ((unsigned char) dst[dst_idx - 1])] |
+                ( src[src_idx] >> 4 ) ];
+                c = b64_encode_table[( src[src_idx] & 0xf ) << 2];
+                dst[dst_idx++] = c;
+                ++phase;
+                break;
+            case 2:
+                dst[dst_idx - 1] =
+                b64_encode_table[
+                b64_decode_table[(int) ((unsigned char) dst[dst_idx - 1])] |
+                ( src[src_idx] >> 6 ) ];
+                c = b64_encode_table[src[src_idx] & 0x3f];
+                dst[dst_idx++] = c;
+                phase = 0;
+                break;
         }
-        /* Pad with ='s. */
-        while ( phase++ < 3 )
-            dst[dst_idx++] = '=';
-        /* And terminate. */
-        dst[dst_idx++] = '\0';
     }
+    /* Pad with ='s. */
+    while ( phase++ < 3 )
+        dst[dst_idx++] = '=';
+    /* And terminate. */
+    dst[dst_idx++] = '\0';
+}
     
