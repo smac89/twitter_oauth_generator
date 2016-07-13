@@ -108,7 +108,7 @@ main( int argc, char** argv )
 	{
 	(void) fprintf( stderr, "%s: method must be GET, HEAD, or POST\n", argv0 );
 	exit( EX_USAGE );
-	}
+	}  
 
     if ( show_sbs )
 	oauth_show_sbs();
