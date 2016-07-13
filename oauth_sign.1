@@ -1,0 +1,75 @@
+.TH oauth_sign 1 "08 January 2012"
+.SH NAME
+oauth_sign - generate an OAuth signature
+.SH SYNOPSIS
+.B oauth_sign
+.RI [ -q ]
+.RI [ -b ]
+.I consumer_key
+.I consumer_key_secret
+.I token
+.I token_secret
+.I method
+.I url
+.RI [ name=value
+.IR ... ]
+.SH DESCRIPTION
+.PP
+OAuth is a three-party authorization protocol described in RFC5849.
+.I Oauth_sign
+generates a signature header to use when making an OAuth request.
+.PP
+To use it, you supply the four cryptographic cookies and the method & URL
+of the request.
+If it's a POST request with extra parameters, you have to give those too.
+.I Oauth_sign
+puts all this together and makes the signature string.
+The signature is generated using HMAC-SHA1 as specified in RFC
+section 3.4.2, and is returned as an Authorization header value
+as specified in RFC section 3.5.1.
+This header can then be used in an HTTP request via, for example,
+the -h flag in http_get(1) and http_post(1) or the -H flag in curl(1).
+.PP
+The signature may also be generated as query parameters, as specified
+in RFC section 3.5.3, by using the -q flag.
+You can also give the -b flag to write the "signature base string"
+to stderr for debugging purposes.
+.PP
+The signature generation code is also available as a C function, if you
+want to link it into your code directly.
+.SH "GETTING A TOKEN"
+The procedure to get a token and token secret varies from
+system to system.
+If you are using Twitter, the standard way to get a token and secret
+is to run through a multi-step request_token / authorize / callback process.
+However if you are the only user of your application, there's
+a way to get Twitter's web site to give you a single token
+for your app.  Go to http://dev.twitter.com/apps and click on
+your app, then click on "My Access Token" over on the right.
+.SH "SEE ALSO"
+http_get(1), http_post(1), curl(1)
+.SH AUTHOR
+Copyright © 2010,2012 by Jef Poskanzer <jef@mail.acme.com>.
+All rights reserved.
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.\" For commentary on this license please see http://acme.com/license.html
