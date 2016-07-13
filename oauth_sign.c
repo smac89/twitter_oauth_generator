@@ -39,18 +39,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <sysexits.h>
-#include "liboauthsign.h"
+#include "logger.h"
+// #include "liboauthsign.h"
 
 
 static void usage( void );
+static int check_method( const char *method );
+static char* program_name;
 
-static char* argv0;
-
-
-int
-main( int argc, char** argv )
-    {
+int main( int argc, char** argv ) {
     int argn;
     int query_mode;
     int show_sbs;
@@ -65,30 +64,32 @@ main( int argc, char** argv )
     char* result;
 
     /* Figure out the program's name. */
-    argv0 = strrchr( argv[0], '/' );
-    if ( argv0 != (char*) 0 )
-	++argv0;
-    else
-	argv0 = argv[0];
+    {
+        program_name = strrchr( argv[0], '/' );
+        if ( program_name != (char*) 0 )
+            ++program_name;
+        else
+            program_name = argv[0];
+    }
 
     /* Get flags. */
     argn = 1;
     query_mode = 0;
     show_sbs = 0;
-    while ( argn < argc && argv[argn][0] == '-' && argv[argn][1] != '\0' )
-	{
-	if ( strcmp( argv[argn], "-q" ) == 0 )
-	    query_mode = 1;
-	else if ( strcmp( argv[argn], "-b" ) == 0 )
-	    show_sbs = 1;
-	else
-	    usage();
-	++argn;
+    while ( argn < argc && argv[argn][0] == '-' && argv[argn][1] != '\0' ) {
+    	if ( strcmp( argv[argn], "-q" ) == 0 )
+    	    query_mode = 1;
+    	else if ( strcmp( argv[argn], "-b" ) == 0 )
+    	    show_sbs = 1;
+    	else
+    	    usage();
+    	++argn;
 	}
 
     /* Get args. */
     if ( argc - argn < 6 )
-	usage();
+	   usage();
+
     consumer_key = argv[argn++];
     consumer_key_secret = argv[argn++];
     token = argv[argn++];
@@ -98,36 +99,121 @@ main( int argc, char** argv )
     paramc = argc - argn;
     paramv = &(argv[argn]);
 
-    if ( query_mode && paramc > 0 )
-	{
-	(void) fprintf( stderr, "%s: -q doesn't work with extra POST parameters\n", argv0 );
-	exit( EX_USAGE );
+    if ( query_mode && paramc > 0 ) {
+    	(void) fprintf( stderr, "%s: -q doesn't work with extra POST parameters\n", program_name );
+    	exit( EX_USAGE );
 	}
 
-    if ( strcmp( method, "GET" ) != 0 && strcmp( method, "HEAD" ) != 0 && strcmp( method, "POST" ) != 0 )
-	{
-	(void) fprintf( stderr, "%s: method must be GET, HEAD, or POST\n", argv0 );
-	exit( EX_USAGE );
-	}  
-
-    if ( show_sbs )
-	oauth_show_sbs();
-    result = oauth_sign( query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc, paramv );
-    if ( result == (char*) 0 )
-	{
-	(void) fprintf( stderr, "%s: signing failed\n", argv0 );
-	exit( EX_SOFTWARE );
+    if ( strcmp( method, "GET" ) != 0 && strcmp( method, "HEAD" ) != 0 && strcmp( method, "POST" ) != 0 ) {
+    	(void) fprintf( stderr, "%s: method must be GET, HEAD, or POST\n", program_name );
+    	exit( EX_USAGE );
 	}
-    (void) printf( "%s\n", result );
-    free( result );
+
+ //    if ( show_sbs )
+ //    	oauth_show_sbs();
+ //        result = oauth_sign( query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc, paramv );
+
+ //    if ( result == (char*) 0 ) {
+ //    	(void) fprintf( stderr, "%s: signing failed\n", program_name );
+ //    	exit( EX_SOFTWARE );
+	// }
+
+ //    (void) printf( "%s\n", result );
+ //    free( result );
 
     exit( EX_OK );
+}
+
+static void check_method( const char *method ) {
+    static const char* methods[] = {
+        "GET", "POST", "DELETE",
+        "PUT", "HEAD"
+    };
+
+    int valid = 0, size = sizeof methods, cnt = 0;
+    char *mptr = NULL;
+    for (mptr = methods[cnt++]; cnt < size; mptr = methods[cnt++]) {
+        if (strcmp(method, mptr) == 0) {
+            valid = 1;
+            break;
+        }
     }
 
+    if (valid != 1) {
+        e_log()
+        (void) fprintf( stderr, "%s: -q doesn't work with extra POST parameters\n", program_name );
+        exit( EX_USAGE );
+    }
 
-static void
-usage( void )
-    {
-    (void) fprintf( stderr, "usage:  %s [-q] consumer_key consumer_key_secret token token_secret method url [name=value ...]\n", argv0 );
+    return valid;
+}
+
+static void usage( void ) {
+    (void) fprintf( stderr, "usage:  %s [-q|-b] consumer_key consumer_key_secret token token_secret method url [name=value ...]\n", program_name );
     exit( EX_USAGE );
-    }
+}
+
+// char *b64 = malloc(bptr->length);
+// snprintf(format, sizeof format, "%%.%zus", bptr->length)
+// 
+// #include <openssl/rand.h>
+// #include <openssl/bio.h>
+// #include <openssl/evp.h>
+// #include <openssl/buffer.h>
+// #include <stdio.h>
+// #include <stdlib.h>
+// #include <string.h>
+
+// static BUF_MEM*
+// base64_bytes(int size) {
+//     char *buf = malloc(size + 1), format[20];
+//     int chunk;
+//     BIO *b64, *out;
+//     BUF_MEM *bptr;
+
+//     // Create a base64 filter/sink
+//     if ((b64 = BIO_new(BIO_f_base64())) == NULL) {
+//         return NULL;
+//     }
+
+//     // Create a memory source
+//     if ((out = BIO_new(BIO_s_mem())) == NULL) {
+//         return NULL;
+//     }
+
+//     // Chain them
+//     out = BIO_push(b64, out);
+//     //Ignore newlines - write everything in one line
+//     BIO_set_flags(out, BIO_FLAGS_BASE64_NO_NL);
+
+//     // Generate random bytes
+//     if (!RAND_bytes(buf, size)) {
+//         return NULL;
+//     }
+
+//     BIO_write(out, buf, size);
+//     BIO_flush(out);
+//     BIO_get_mem_ptr(out, &bptr);
+//     BIO_set_close(out, BIO_NOCLOSE);
+//     BIO_free_all(out);
+
+//     return bptr;
+// }
+
+// int main() {
+//     BUF_MEM *mem = base64_bytes(32);
+//     if (mem != NULL) {
+//         char format[100];
+//         snprintf(format, sizeof format, "The size is %1$zu\n%%.%1$zus\n\n", mem->length);
+//         printf(format, mem->data);
+//     }
+    
+//     // unsigned char buffer[33] = {}, *base64EncodeOutput;
+//     // int ret = RAND_bytes(buffer, sizeof buffer);
+
+//     // (void)Base64Encode(buffer, &base64EncodeOutput);
+//     // (void)printf("Return value of the operation was: %d\n%45s\n", ret, base64EncodeOutput);
+
+
+//     return EXIT_SUCCESS;
+// }
