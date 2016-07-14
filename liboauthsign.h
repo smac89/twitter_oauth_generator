@@ -13,3 +13,15 @@ char* oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_s
 ** will get written to stderr as a debugging aid.
 */
 void oauth_show_sbs( void );
+
+typedef struct OauthBuilder Builder;
+typedef void (*BuilderMethod) (Builder*, const char *);
+
+
+Builder* new_oauth_builder();
+BuilderMethod set_consumer_key;
+BuilderMethod set_consumer_secret;
+BuilderMethod set_method;
+BuilderMethod set_url;
+void destroy_builder(Builder *builder);
+const char* get_signature(const Builder* builder);

@@ -42,6 +42,7 @@
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
+#include <curl/curl.h>
 #include "logger.h"
 
 #include "liboauthsign.h"
@@ -49,6 +50,7 @@
 #define MALLOC_CHECK_ASSIGN(rhs,size,fail) do { void* tmp = malloc( size ); if ( tmp == (void*) 0 ) return fail; rhs = tmp; } while (0)
 #define STRDUP_CHECK_ASSIGN(rhs,str,fail) do { char* tmp = strdup( str ); if ( tmp == (char*) 0 ) return fail; rhs = tmp; } while (0)
 #define PERCENT_ENCODE_CHECK_ASSIGN(rhs,str,fail) do { char* tmp = percent_encode( str ); if ( tmp == (char*) 0 ) return fail; rhs = tmp; } while (0)
+#define INIT_BUILDER_PATTERN()
 
 #define max(a,b) ((a)>(b)?(a):(b))
 
@@ -63,9 +65,19 @@ typedef struct {
     char* value;
     char* encoded_name;
     char* encoded_value;
-} param;
+} Param;
 
+/**/
+struct OauthBuilder {
+    Param oauth_consumer_key;
+    Param oauth_signature;
+    Param oauth_signature_method;
+    Param oauth_timestamp;
+    Param oauth_token;
+    Param oauth_version;
+};
 
+static CURL* curl = curl_easy_init();
 static int show_sbs = 0;
 
 void oauth_show_sbs( void )
@@ -86,13 +98,13 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
     char* query_string;
     int n_ampers;
     int max_query_params, n_query_params;
-    param* query_params;
+    Param* query_params;
     int max_post_params, n_post_params;
-    param* post_params;
+    Param* post_params;
     int max_proto_params, n_proto_params;
-    param* proto_params;
+    Param* proto_params;
     int max_all_params, n_all_params;
-    param* all_params;
+    Param* all_params;
     int i;
     char* cp;
     char* equal;
@@ -148,7 +160,7 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
                 ++n_ampers;
             max_query_params = n_ampers + 1;
     }
-    MALLOC_CHECK_ASSIGN( query_params, sizeof(param) * max_query_params, (char*) 0 );
+    MALLOC_CHECK_ASSIGN( query_params, sizeof(Param) * max_query_params, (char*) 0 );
     n_query_params = 0;
     if ( qmark != (char*) 0 )
     {
@@ -181,7 +193,7 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
     
     /* Add in the optional POST params. */
     max_post_params = max( paramc, 1 );     /* avoid malloc(0) */
-    MALLOC_CHECK_ASSIGN( post_params, sizeof(param) * max_post_params, (char*) 0 );
+    MALLOC_CHECK_ASSIGN( post_params, sizeof(Param) * max_post_params, (char*) 0 );
     n_post_params = 0;
     for ( n_post_params = 0; n_post_params < paramc; ++n_post_params )
     {
@@ -198,7 +210,7 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
     
     /* Make the protocol params. */
     max_proto_params = 7;
-    MALLOC_CHECK_ASSIGN( proto_params, sizeof(param) * max_proto_params, (char*) 0 );
+    MALLOC_CHECK_ASSIGN( proto_params, sizeof(Param) * max_proto_params, (char*) 0 );
     n_proto_params = 0;
     if ( strlen( consumer_key ) > 0 )
     {
@@ -227,7 +239,7 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
     
     /* Percent-encode and concatenate the parameter lists. */
     max_all_params = max_query_params + max_post_params + max_proto_params ;
-    MALLOC_CHECK_ASSIGN( all_params, sizeof(param) * max_all_params, (char*) 0 );
+    MALLOC_CHECK_ASSIGN( all_params, sizeof(Param) * max_all_params, (char*) 0 );
     n_all_params = 0;
     for ( i = 0; i < n_query_params; ++i )
     {
@@ -252,7 +264,7 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
     }
     
     /* Sort the combined & encoded parameters. */
-    qsort( all_params, n_all_params, sizeof(param), compare );
+    qsort( all_params, n_all_params, sizeof(Param), compare );
     
     /* Construct the signature base string.  First get the base URL. */
     STRDUP_CHECK_ASSIGN( base_url, url, (char*) 0 );
@@ -364,7 +376,7 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
     
     /* Free everything except authorization. */
     free( query_string );
-    
+
     for ( i = 0; i < n_query_params; ++i ) {
         free( query_params[i].name );
         free( query_params[i].value );
@@ -397,8 +409,7 @@ oauth_sign( int query_mode, char* consumer_key, const char* consumer_key_secret,
 }
 
 static char*
-percent_encode( const char* str )
-{
+percent_encode( const char* str ) {
     int max_len;
     char* new_str;
     const char* cp;
@@ -408,12 +419,10 @@ percent_encode( const char* str )
     
     max_len = strlen( str ) * 3;
     MALLOC_CHECK_ASSIGN( new_str, max_len + 1, (char*) 0 );
-    for ( cp = str, new_cp = new_str; *cp != '\0'; ++cp )
-    {
+    for ( cp = str, new_cp = new_str; *cp != '\0'; ++cp ) {
         if ( strchr( ok, *cp ) != (char*) 0 )
             *new_cp++ = *cp;
-        else
-        {
+        else {
             *new_cp++ = '%';
             *new_cp++ = to_hexit[ ( (*cp) >> 4 ) & 0xf ];
             *new_cp++ = to_hexit[ (*cp) & 0xf ];
@@ -425,10 +434,9 @@ percent_encode( const char* str )
 
 
 static int
-compare( const void* v1, const void* v2 )
-{
-    const param* p1 = (const param*) v1;
-    const param* p2 = (const param*) v2;
+compare( const void* v1, const void* v2 ) {
+    const Param* p1 = (const Param*) v1;
+    const Param* p2 = (const Param*) v2;
     int r = strcmp( p1->encoded_name, p2->encoded_name );
     if ( r == 0 )
         r = strcmp( p1->encoded_value, p2->encoded_value );
@@ -440,12 +448,9 @@ compare( const void* v1, const void* v2 )
 ** same string.
 */
 static void
-url_decode( char* to, const char* from )
-{
-    for ( ; *from != '\0'; ++to, ++from )
-    {
-        if ( from[0] == '%' && isxdigit( from[1] ) && isxdigit( from[2] ) )
-        {
+url_decode( char* to, const char* from ) {
+    for ( ; *from != '\0'; ++to, ++from ) {
+        if ( from[0] == '%' && isxdigit( from[1] ) && isxdigit( from[2] ) ) {
             *to = from_hexit( from[1] ) * 16 + from_hexit( from[2] );
             from += 2;
         }
@@ -459,8 +464,7 @@ url_decode( char* to, const char* from )
 
 
 static int
-from_hexit( char c )
-{
+from_hexit( char c ) {
     if ( c >= '0' && c <= '9' )
         return c - '0';
     if ( c >= 'a' && c <= 'f' )
@@ -470,7 +474,12 @@ from_hexit( char c )
     return 0;           /* shouldn't happen, we're guarded by isxdigit() */
 }
 
-static char* base64_bytes(unsigned char* src, int src_size) {
+/**
+ *    Given an array of bytes, encodes them to base64 and returns the result
+ *    IT IS THE RESPONSIBILITY OF THE CALLER TO FREE RETURNED POINTER
+ */
+static char*
+base64_bytes(unsigned char* src, int src_size) {
     BIO *b64 = NULL, *mem = NULL;
     BUF_MEM *bptr = NULL;
     char *bytes = NULL;
@@ -491,13 +500,13 @@ static char* base64_bytes(unsigned char* src, int src_size) {
         return ( char* )NULL;
     }
 
-    /*Create a memory source*/
+    /*Create a memory source, this is where everything will end up eventually*/
     if ((mem = BIO_new(BIO_s_mem())) == NULL) {
         e_log("Could not allocate storage for the conversion");
         return ( char* )NULL;
     }
 
-    /*Chain them*/
+    /* Chain them: --> b64 >|> mem */
     mem = BIO_push(b64, mem);
     BIO_set_flags(mem, BIO_FLAGS_BASE64_NO_NL);
 
@@ -505,16 +514,15 @@ static char* base64_bytes(unsigned char* src, int src_size) {
     BIO_write(mem, src, src_size);
     BIO_flush(b64);
 
-    /*Now remove the base64 filter and write a null terminator*/
+    /*Now remove the base64 filter: -->mem, and write a null terminator*/
     mem = BIO_pop(b64);
-
-    /*Write the null terminating character*/
     BIO_write(mem, "\0", 1);
+
+    /*Retrieve the underlying memory pointer*/
     BIO_get_mem_ptr(mem, &bptr);
 
     /*Allocate memory for the internal buffer and copy it to the new location*/
-    bytes = malloc(bptr->length);
-    strncpy(bytes, bptr->data, bptr->length);
+    bytes = strdup(bptr->data);
 
     /*Cleanup*/
     BIO_set_close(mem, BIO_CLOSE);
@@ -524,4 +532,39 @@ static char* base64_bytes(unsigned char* src, int src_size) {
 
     return bytes;
 }
-    
+
+static void
+curl_encode(const char* in, size_t length, char **out) {
+    char *encode = curl_easy_escape(curl, in, length);
+    *out = strdup(encode);
+    curl_free(encode);
+}
+
+static void
+curl_decode(const char* in, size_t length, char **out) {
+    int len;
+    char *decode = curl_easy_unescape(curl, in, length, &len);
+    *out = strdup(decode);
+    curl_free(decode);
+}
+
+static void 
+set_key(Builder* builder, const char* key) {
+    builder->oauth_consumer_key.value = strdup(key);
+}
+
+Builder*
+new_oauth_builder() {
+    Builder* base = malloc(sizeof (Builder));
+    set_consumer_key = set_key;
+    return base;
+}
+
+void destroy_builder(Builder *builder) {
+
+}
+
+const char*
+get_signature(const Builder* builder) {
+    return NULL;
+}

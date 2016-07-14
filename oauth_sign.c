@@ -115,10 +115,13 @@ int main( int argc, char** argv ) {
         oauth_show_sbs();
     }
 
+    Builder *b = new_oauth_builder();
+    set_consumer_key(b, "Hello");
+
     result = oauth_sign( query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc, paramv );
 
     if ( result == (char*) 0 ) {
-        (void) fprintf( stderr, "%s: signing failed\n", program_name );
+        e_log( "%s: signing failed\n", program_name );
         exit( EX_SOFTWARE );
     }
 
