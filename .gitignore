@@ -1,7 +1,7 @@
 # Ignore all
 *
-!LICENCE.*
-!README.*
+!LICENCE*
+!README*
 
 # watch all with extensions
 !*.*
