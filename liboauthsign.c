@@ -547,6 +547,13 @@ base64_bytes(unsigned char* src, int src_size) {
     return bytes;
 }
 
+/**
+ * @brief      Creates a copy of a string
+ *
+ * @param[in]  s     The string to copy
+ *
+ * @return     The copy of the string or null if the copying failed
+ */
 static char*
 oauth_strdup(const char* s) {
     char *dest = NULL;
@@ -554,6 +561,13 @@ oauth_strdup(const char* s) {
     return dest;
 }
 
+/**
+ * @brief      percent-encodes a given string
+ *
+ * @param[in]  in      The string to encode
+ * @param[in]  length  The length
+ * @param      out     The address of a pointer to hold the encoded string
+ */
 static void
 curl_encode(const char* in, size_t length, char **out) {
     char *encode = curl_easy_escape(curl, in, length);
@@ -561,6 +575,13 @@ curl_encode(const char* in, size_t length, char **out) {
     curl_free(encode);
 }
 
+/**
+ * @brief      Decodes a given string (opposite of encode)
+ *
+ * @param[in]  in      The encoded string to decode
+ * @param[in]  length  The length of the encoded string
+ * @param      out     The address of a pointer to hold the decoded string
+ */
 static void
 curl_decode(const char* in, size_t length, char **out) {
     int len;
@@ -569,6 +590,11 @@ curl_decode(const char* in, size_t length, char **out) {
     curl_free(decode);
 }
 
+/**
+ * @brief      Helper to free the params of a Builder object
+ *
+ * @param      param  A pointer to the param to deallocate memory for
+ */
 static void 
 free_param(Param *param) {
     FREE_IF_NOT_NULL(param->name);
@@ -577,41 +603,89 @@ free_param(Param *param) {
     FREE_IF_NOT_NULL(param->encoded_value);
 }
 
+/**
+ * @brief      Sets the consumer key.
+ *
+ * @param      builder  The builder
+ * @param[in]  key      The key
+ */
 void 
 set_consumer_key(Builder* builder, const char* key) {
     builder->oauth_consumer_key.value = oauth_strdup(key);
 }
 
+/**
+ * @brief      Sets the consumer secret.
+ *
+ * @param      builder  The builder
+ * @param[in]  key      The secret
+ */
 void 
 set_consumer_secret(Builder* builder, const char* key) {
     builder->rest[CONSUMER_SECRET] = oauth_strdup(key);
 }
 
+/**
+ * @brief      Sets the token.
+ *
+ * @param      builder  The builder
+ * @param[in]  key      The token
+ */
 void 
 set_token(Builder* builder, const char* key) {
     builder->oauth_token.value = oauth_strdup(key);
 }
 
+/**
+ * @brief      Sets the token secret.
+ *
+ * @param      builder  The builder
+ * @param[in]  key      The token secret
+ */
 void 
 set_token_secret(Builder* builder, const char* key) {
     builder->rest[TOKEN_SECRET] = oauth_strdup(key);
 }
 
+/**
+ * @brief      Sets the url method.
+ *
+ * @param      builder  The builder
+ * @param[in]  key      The url method
+ */
 void 
 set_method(Builder* builder, const char* key) {
     builder->rest[METHOD] = oauth_strdup(key);
 }
 
+/**
+ * @brief      Sets the url.
+ *
+ * @param      builder  The builder
+ * @param[in]  key      The url
+ */
 void
 set_url(Builder* builder, const char* key) {
     builder->rest[URL] = oauth_strdup(key);
 }
 
+/**
+ * @brief      Sets the url parameters.
+ *
+ * @param      builder  The builder
+ * @param      key      The array of parameters
+ * @param[in]  len      The length of the array
+ */
 void
 set_url_params(Builder* builder, const char** key, int len) {
     /*builder->rest[URL_PARAMS] = oauth_strdup(key);*/
 }
 
+/**
+ * @brief      Creates a new builder object
+ *
+ * @return     a builder for collecting the required parameters
+ */
 Builder*
 new_oauth_builder( void ) {
     Builder* builder = malloc(sizeof (Builder));
@@ -643,6 +717,12 @@ new_oauth_builder( void ) {
     return builder;
 }
 
+/**
+ * @brief      Destroys a builder.
+ *
+ * @param      builder  The builder
+ * @pre        Must not be null and must have been created by new_oauth_builder()
+ */
 void
 destroy_builder(Builder **builder) {
 
@@ -661,13 +741,20 @@ destroy_builder(Builder **builder) {
         free_param(&ref->oauth_consumer_key);
 
         free (*builder);
+        *builder = NULL;
         if (--BUILDER_REF_COUNT == 0) {
             curl_easy_cleanup(curl);
         }
-
     }
 }
 
+/**
+ * @brief      Gets the signature.
+ *
+ * @param[in]  builder  The builder with all the required parameters
+ *
+ * @return     The signature.
+ */
 const char*
 get_signature(const Builder* builder) {
     return NULL;
