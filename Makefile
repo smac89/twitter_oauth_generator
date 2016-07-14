@@ -3,7 +3,7 @@ MANDIR =    /usr/local/man/man1
 LIBDIR =    /usr/local/lib
 INCDIR =    /usr/local/include
 CC =        cc
-CFLAGS =    -O -ansi -pedantic -U__STRICT_ANSI__ -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wno-long-long
+CFLAGS =    -O -ansi -pedantic -ggdb3 -U__STRICT_ANSI__ -Wall -Wextra -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wbad-function-cast -Wno-missing-field-initializers -Wno-long-long -Wswitch-default -Wshadow -Wunreachable-code -Wold-style-definition
 LDFLAGS =   -L.
 LIBS =      -loauthsign -lcrypto -lcurl
 

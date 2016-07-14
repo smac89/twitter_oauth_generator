@@ -50,7 +50,7 @@
 #define MALLOC_CHECK_ASSIGN(rhs,size,fail) do { void* tmp = malloc( size ); if ( tmp == (void*) 0 ) return fail; rhs = tmp; } while (0)
 #define STRDUP_CHECK_ASSIGN(rhs,str,fail) do { char* tmp = strdup( str ); if ( tmp == (char*) 0 ) return fail; rhs = tmp; } while (0)
 #define PERCENT_ENCODE_CHECK_ASSIGN(rhs,str,fail) do { char* tmp = percent_encode( str ); if ( tmp == (char*) 0 ) return fail; rhs = tmp; } while (0)
-#define INIT_BUILDER_PATTERN()
+#define FREE_IF_NOT_NULL(obj) do { if (obj != NULL) free(obj); } while (0)
 
 #define max(a,b) ((a)>(b)?(a):(b))
 
@@ -67,17 +67,31 @@ typedef struct {
     char* encoded_value;
 } Param;
 
+typedef enum {
+    CONSUMER_SECRET = 0,
+    TOKEN_SECRET,
+    METHOD,
+    URL,
+    URL_PARAMS
+} RestPos;
+
 /**/
 struct OauthBuilder {
     Param oauth_consumer_key;
+    Param oauth_nonce;
     Param oauth_signature;
     Param oauth_signature_method;
     Param oauth_timestamp;
     Param oauth_token;
     Param oauth_version;
+
+/*    consumer_secret, token_secret, method, url, extra_params*/    
+    char *rest[5];
 };
 
-static CURL* curl = curl_easy_init();
+
+static CURL* curl;
+static int BUILDER_REF_COUNT = 0;
 static int show_sbs = 0;
 
 void oauth_show_sbs( void )
@@ -522,7 +536,7 @@ base64_bytes(unsigned char* src, int src_size) {
     BIO_get_mem_ptr(mem, &bptr);
 
     /*Allocate memory for the internal buffer and copy it to the new location*/
-    bytes = strdup(bptr->data);
+    STRDUP_CHECK_ASSIGN(bytes, bptr->data, (char *)0);
 
     /*Cleanup*/
     BIO_set_close(mem, BIO_CLOSE);
@@ -533,10 +547,17 @@ base64_bytes(unsigned char* src, int src_size) {
     return bytes;
 }
 
+static char*
+oauth_strdup(const char* s) {
+    char *dest = NULL;
+    STRDUP_CHECK_ASSIGN(dest, s, (char *)0);
+    return dest;
+}
+
 static void
 curl_encode(const char* in, size_t length, char **out) {
     char *encode = curl_easy_escape(curl, in, length);
-    *out = strdup(encode);
+    *out = oauth_strdup(encode);
     curl_free(encode);
 }
 
@@ -544,24 +565,107 @@ static void
 curl_decode(const char* in, size_t length, char **out) {
     int len;
     char *decode = curl_easy_unescape(curl, in, length, &len);
-    *out = strdup(decode);
+    *out = oauth_strdup(decode);
     curl_free(decode);
 }
 
 static void 
-set_key(Builder* builder, const char* key) {
-    builder->oauth_consumer_key.value = strdup(key);
+free_param(Param *param) {
+    FREE_IF_NOT_NULL(param->name);
+    FREE_IF_NOT_NULL(param->value);
+    FREE_IF_NOT_NULL(param->encoded_name);
+    FREE_IF_NOT_NULL(param->encoded_value);
+}
+
+void 
+set_consumer_key(Builder* builder, const char* key) {
+    builder->oauth_consumer_key.value = oauth_strdup(key);
+}
+
+void 
+set_consumer_secret(Builder* builder, const char* key) {
+    builder->rest[CONSUMER_SECRET] = oauth_strdup(key);
+}
+
+void 
+set_token(Builder* builder, const char* key) {
+    builder->oauth_token.value = oauth_strdup(key);
+}
+
+void 
+set_token_secret(Builder* builder, const char* key) {
+    builder->rest[TOKEN_SECRET] = oauth_strdup(key);
+}
+
+void 
+set_method(Builder* builder, const char* key) {
+    builder->rest[METHOD] = oauth_strdup(key);
+}
+
+void
+set_url(Builder* builder, const char* key) {
+    builder->rest[URL] = oauth_strdup(key);
+}
+
+void
+set_url_params(Builder* builder, const char** key, int len) {
+    /*builder->rest[URL_PARAMS] = oauth_strdup(key);*/
 }
 
 Builder*
-new_oauth_builder() {
-    Builder* base = malloc(sizeof (Builder));
-    set_consumer_key = set_key;
-    return base;
+new_oauth_builder( void ) {
+    Builder* builder = malloc(sizeof (Builder));
+    Builder temp = {
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL, NULL}
+    };
+
+    temp.oauth_consumer_key.name = oauth_strdup("oauth_consumer_key");
+    temp.oauth_nonce.name = oauth_strdup("oauth_nonce");
+    temp.oauth_signature.name = oauth_strdup("oauth_signature");
+    temp.oauth_signature_method.name = oauth_strdup("oauth_signature_method");
+    temp.oauth_timestamp.name = oauth_strdup("oauth_timestamp");
+    temp.oauth_token.name = oauth_strdup("oauth_token");
+    temp.oauth_version.name = oauth_strdup("oauth_version");
+
+    memcpy(builder, &temp, sizeof (Builder));
+
+    if (++BUILDER_REF_COUNT == 1) {
+        curl = curl_easy_init();
+    }
+
+    return builder;
 }
 
-void destroy_builder(Builder *builder) {
+void
+destroy_builder(Builder **builder) {
 
+    if (*builder != NULL && BUILDER_REF_COUNT > 0) {
+        Builder *ref = *builder;
+        int i;
+        for (i = 0; i < 5; i++) {
+            FREE_IF_NOT_NULL(ref->rest[i]);
+        }
+        free_param(&ref->oauth_version);
+        free_param(&ref->oauth_token);
+        free_param(&ref->oauth_timestamp);
+        free_param(&ref->oauth_signature_method);
+        free_param(&ref->oauth_signature);
+        free_param(&ref->oauth_nonce);
+        free_param(&ref->oauth_consumer_key);
+
+        free (*builder);
+        if (--BUILDER_REF_COUNT == 0) {
+            curl_easy_cleanup(curl);
+        }
+
+    }
 }
 
 const char*

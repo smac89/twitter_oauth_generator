@@ -115,8 +115,9 @@ int main( int argc, char** argv ) {
         oauth_show_sbs();
     }
 
-    Builder *b = new_oauth_builder();
+    /*Builder *b = new_oauth_builder();
     set_consumer_key(b, "Hello");
+    destroy_builder(&b);*/
 
     result = oauth_sign( query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc, paramv );
 
