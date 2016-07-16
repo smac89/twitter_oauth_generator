@@ -9,11 +9,14 @@ LIBS =      -loauthsign -lcrypto -lcurl
 
 all:        oauth_sign liboauthsign.a
 
-oauth_sign: logger.o oauth_sign.c liboauthsign.h liboauthsign.a
-	$(CC) $(CFLAGS) oauth_sign.c $(LDFLAGS) $(LIBS) -o oauth_sign logger.o
+oauth_sign: logger.o liboauthsigntw.o oauth_sign.c liboauthsign.a
+	$(CC) $(CFLAGS) oauth_sign.c $(LDFLAGS) -o oauth_sign logger.o liboauthsigntw.o $(LIBS)
 
 logger.o: logger.c logger.h
 	$(CC) -c $(CFLAGS) logger.c
+
+liboauthsigntw.o: liboauthsigntw.c liboauthsigntw.h
+	$(CC) -c $(CFLAGS) liboauthsigntw.c
 
 liboauthsign.o: liboauthsign.c liboauthsign.h
 	$(CC) -c $(CFLAGS) liboauthsign.c

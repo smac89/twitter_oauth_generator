@@ -44,6 +44,7 @@
 #include <sysexits.h>
 #include "logger.h"
 #include "liboauthsign.h"
+#include "liboauthsigntw.h"
 
 
 static void usage( void );
@@ -97,7 +98,12 @@ int main( int argc, char** argv ) {
     token = argv[argn++];
     token_secret = argv[argn++];
     method = argv[argn++];
+
+    /***********************************************/
+    /*char *url = strtok(oauth_strdup(key), "?#");*/
     url = argv[argn++];
+    /***********************************************/
+
     paramc = argc - argn;
     paramv = &(argv[argn]);
 
