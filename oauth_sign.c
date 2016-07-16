@@ -9,7 +9,7 @@
 ** value, as specified in:
 **   http://tools.ietf.org/html/rfc5849#section-3.5.1
 **
-** Copyright © 2010,2012 by Jef Poskanzer <jef@mail.acme.com>.
+** Copyright ï¿½ 2010,2012 by Jef Poskanzer <jef@mail.acme.com>.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -39,36 +39,36 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <ctype.h>
 #include <sysexits.h>
 #include "logger.h"
 #include "liboauthsign.h"
-#include "liboauthsigntw.h"
 
 
-static void usage( void );
-static int check_method( char *method );
-static char* program_name;
+static void usage(void);
 
-int main( int argc, char** argv ) {
+static int check_method(char *method);
+
+static char *program_name;
+
+int main(int argc, char **argv) {
     int argn;
     int query_mode;
     int show_sbs;
-    char* consumer_key;
-    char* consumer_key_secret;
-    char* token;
-    char* token_secret;
-    char* method;
-    char* url;
+    char *consumer_key;
+    char *consumer_key_secret;
+    char *token;
+    char *token_secret;
+    char *method;
+    char *url;
     int paramc;
-    char** paramv;
-    char* result;
+    char **paramv;
+    char *result;
 
     /* Figure out the program's name. */
     {
-        program_name = strrchr( argv[0], '/' );
-        if ( program_name != (char*) 0 )
+        program_name = strrchr(argv[0], '/');
+        if (program_name != (char *) 0)
             ++program_name;
         else
             program_name = argv[0];
@@ -78,10 +78,10 @@ int main( int argc, char** argv ) {
     argn = 1;
     query_mode = 0;
     show_sbs = 0;
-    while ( argn < argc && argv[argn][0] == '-' && argv[argn][1] != '\0' ) {
-        if ( strcmp( argv[argn], "-q" ) == 0 )
+    while (argn < argc && argv[argn][0] == '-' && argv[argn][1] != '\0') {
+        if (strcmp(argv[argn], "-q") == 0)
             query_mode = 1;
-        else if ( strcmp( argv[argn], "-b" ) == 0 )
+        else if (strcmp(argv[argn], "-b") == 0)
             show_sbs = 1;
         else
             usage();
@@ -89,8 +89,8 @@ int main( int argc, char** argv ) {
     }
 
     /* Get args. */
-    if ( argc - argn < 6 ) {
-       usage();
+    if (argc - argn < 6) {
+        usage();
     }
 
     consumer_key = argv[argn++];
@@ -107,17 +107,17 @@ int main( int argc, char** argv ) {
     paramc = argc - argn;
     paramv = &(argv[argn]);
 
-    if ( query_mode && paramc > 0 ) {
+    if (query_mode && paramc > 0) {
         e_log("%s: -q doesn't work with extra POST parameters\n", program_name);
-        exit( EX_USAGE );
+        exit(EX_USAGE);
     }
 
     if (check_method(method) != 1) {
-        e_log( "%s: method must be GET, POST, DELETE, PUT, or HEAD\n", program_name );
-        exit( EX_USAGE );
+        e_log("%s: method must be GET, POST, DELETE, PUT, or HEAD\n", program_name);
+        exit(EX_USAGE);
     }
 
-    if ( show_sbs ) {
+    if (show_sbs) {
         oauth_show_sbs();
     }
 
@@ -125,36 +125,36 @@ int main( int argc, char** argv ) {
     set_consumer_key(b, "Hello");
     destroy_builder(&b);*/
 
-    result = oauth_sign( query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc, paramv );
+    result = oauth_sign(query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc,
+                        paramv);
 
-    if ( result == (char*) 0 ) {
-        e_log( "%s: signing failed\n", program_name );
-        exit( EX_SOFTWARE );
+    if (result == (char *) 0) {
+        e_log("%s: signing failed\n", program_name);
+        exit(EX_SOFTWARE);
     }
 
-    (void) printf( "%s\n", result );
-    free( result );
+    (void) printf("%s\n", result);
+    free(result);
 
-    exit( EX_OK );
+    exit(EX_OK);
 }
 
-static int check_method( char *method ) {
-    static const char* methods[] = {
-        "GET", "POST", "DELETE",
-        "PUT", "HEAD"
+static int check_method(char *method) {
+    static const char *methods[] = {
+            "GET", "POST", "DELETE",
+            "PUT", "HEAD"
     };
 
-    int valid = 0, size = sizeof methods, cnt = 0;
+    int valid = 0, size = sizeof methods, cnt;
     char *up = method;
-    const char *mptr = NULL;
 
     while (*up) {
         *up = toupper(*up);
         ++up;
     }
 
-    for (mptr = methods[cnt++]; cnt < size; mptr = methods[cnt++]) {
-        if (strcmp(method, mptr) == 0) {
+    for (cnt = 0; cnt < size; cnt++) {
+        if (strcmp(method, methods[cnt]) == 0) {
             valid = 1;
             break;
         }
@@ -163,10 +163,10 @@ static int check_method( char *method ) {
     return valid;
 }
 
-static void usage( void ) {
-    e_log( "usage:  %s [-q|-b] "
-        "<consumer_key> <consumer_key_secret> "
-        "<token> <token_secret> <method< <url> "
-        "[name=value ...]\n", program_name );
-    exit( EX_USAGE );
+static void usage(void) {
+    e_log("usage:  %s [-q|-b] "
+                  "<consumer_key> <consumer_key_secret> "
+                  "<token> <token_secret> <method< <url> "
+                  "[name=value ...]\n", program_name);
+    exit(EX_USAGE);
 }
