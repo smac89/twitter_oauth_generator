@@ -7,6 +7,8 @@
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
 #include <curl/curl.h>
+#include <openssl/hmac.h>
+#include <openssl/sha.h>
 
 #include "logger.h"
 #include "liboauthsign.h"
@@ -50,6 +52,10 @@ static void curl_decode_len(const char *in, size_t length, char **out);
 
 static void curl_decode(const char *in, char **out);
 
+static BUF_MEM *create_signature_base(const Builder *builder, const char *parameter_string, size_t len);
+
+static BUF_MEM *get_signing_key(const Builder *builder);
+
 static void free_param(Param *param);
 
 static void set_nonce(Builder *builder);
@@ -60,19 +66,13 @@ static void set_timestamp(Builder *builder);
 
 static void set_oauth_version(Builder *builder);
 
-static void set_oauth_signature(Builder *builder);
+static void set_signature(Builder *builder);
 
 static void collect_parameters(const Builder *builder, Param ***dest, int *size);
 
 static int compare(const void *v1, const void *v2);
 
-/**
- * @brief      Gets the header string.
- *
- * @param[in]  builder  The builder with all the required parameters
- *
- * @return     The header string.
- */
+
 const char *
 get_header_string(Builder *builder) {
     set_nonce(builder);
@@ -81,25 +81,13 @@ get_header_string(Builder *builder) {
     set_oauth_version(builder);
 
     /* Done last in order to have the values needed*/
-    set_oauth_signature(builder);
+    set_signature(builder);
 
     /* signature method */
 
     return NULL;
 }
 
-/**
- * @brief      Sets the consumer key.
- * 
- * @details    The oauth_consumer_key identifies which application is 
- * making the request. Obtain this value from checking the settings 
- * page for your application on dev.twitter.com/apps.
- * 
- * @example    oauth_consumer_key   xvz1evFS4wEEPTGEFPHBog
- *
- * @param      builder  The builder
- * @param[in]  key      The key
- */
 void
 set_consumer_key(Builder *builder, const char *key) {
     builder->oauth_consumer_key.value = oauth_strdup(key);
@@ -108,12 +96,6 @@ set_consumer_key(Builder *builder, const char *key) {
                 &builder->oauth_consumer_key.encoded_value);
 }
 
-/**
- * @brief      Sets the consumer secret.
- *
- * @param      builder  The builder
- * @param[in]  key      The secret
- */
 void
 set_consumer_secret(Builder *builder, const char *key) {
     builder->consumer_secret.value = oauth_strdup(key);
@@ -122,23 +104,6 @@ set_consumer_secret(Builder *builder, const char *key) {
                 &builder->consumer_secret.encoded_value);
 }
 
-/**
- * @brief      Sets the token.
- * 
- * @details    The <b>oauth_token</b> parameter typically represents a user’s 
- * permission to share access to their account with your application.
- * There are a few authentication requests where this value is not passed 
- * or is a different form of token, but those are covered in detail in 
- * Obtaining access tokens. For most general-purpose requests, you will use 
- * what is referred to as an <b>access token</b>. You can generate a valid 
- * access token for your account on the settings page for your application 
- * at dev.twitter.com/apps.
- * 
- * @example    oauth_token  370773112-GmHxMAgYyLbNEtIKZeRNFsMKPR9EyMZeS9weJAEb
- *
- * @param      builder  The builder
- * @param[in]  key      The token
- */
 void
 set_token(Builder *builder, const char *key) {
     builder->oauth_token.value = oauth_strdup(key);
@@ -147,12 +112,6 @@ set_token(Builder *builder, const char *key) {
                 &builder->oauth_token.encoded_value);
 }
 
-/**
- * @brief      Sets the token secret.
- *
- * @param      builder  The builder
- * @param[in]  key      The token secret
- */
 void
 set_token_secret(Builder *builder, const char *key) {
     builder->token_secret.value = oauth_strdup(key);
@@ -161,15 +120,6 @@ set_token_secret(Builder *builder, const char *key) {
                 &builder->token_secret.encoded_value);
 }
 
-/**
- * @brief      Sets the http method.
- * 
- * @details    The request method will almost always be GET or POST 
- * for Twitter API requests.
- *
- * @param      builder  The builder
- * @param[in]  key      The http method
- */
 void
 set_http_method(Builder *builder, const char *key) {
     builder->http_method.value = oauth_strdup(key);
@@ -178,18 +128,6 @@ set_http_method(Builder *builder, const char *key) {
                 &builder->http_method.encoded_value);
 }
 
-/**
- * @brief      Sets the base url.
- * 
- * @details    The base URL is the URL to which the request is directed, <em>minus any 
- * query string or hash parameters</em>. It is important to use the correct protocol here, 
- * so make sure that the "https://" or "http://" portion of the URL matches the actual 
- * request sent to the API. As a best practice, you should always be using 
- * "https://" with the Twitter API.
- *
- * @param      builder  The builder
- * @param[in]  key      The url
- */
 void
 set_base_url(Builder *builder, const char *key) {
     builder->base_url.value = oauth_strdup(key);
@@ -198,13 +136,6 @@ set_base_url(Builder *builder, const char *key) {
                 &builder->base_url.encoded_value);
 }
 
-/**
- * @brief      Sets the request parameters.
- *
- * @param      builder  The builder
- * @param      params   The parameters
- * @param[in]  length    The length
- */
 void
 set_request_params(Builder *builder, const char **params, int length) {
     int c, d;
@@ -235,11 +166,6 @@ set_request_params(Builder *builder, const char **params, int length) {
     }
 }
 
-/**
- * @brief      Creates a new builder object
- *
- * @return     a builder for collecting the required parameters
- */
 Builder *
 new_oauth_builder(void) {
     Builder *builder = malloc(sizeof(Builder));
@@ -290,12 +216,6 @@ new_oauth_builder(void) {
     return builder;
 }
 
-/**
- * @brief      Destroys a builder.
- *
- * @param      builder  The builder
- * @pre        Must not be null and must have been created by new_oauth_builder()
- */
 void
 destroy_builder(Builder **builder) {
 
@@ -351,12 +271,13 @@ destroy_builder(Builder **builder) {
  * @param      builder  The builder
  */
 static void
-set_oauth_signature(Builder *builder) {
+set_signature(Builder *builder) {
     BIO *mem = NULL;
-    BUF_MEM *bptr = NULL;
+    BUF_MEM *bptr = NULL, *base = NULL, *key = NULL;
+    unsigned char sig[SHA_DIGEST_LENGTH] = {0};
 
     int size, len, i;
-    const Param **lst;
+    Param **lst;
 
     collect_parameters(builder, &lst, &size);
 
@@ -370,7 +291,77 @@ set_oauth_signature(Builder *builder) {
         }
     }
 
-    /* Collect the string here... */
+    BIO_get_mem_ptr(mem, bptr);
+
+    base = create_signature_base(builder, bptr->data, bptr->length);
+    key = get_signing_key(builder);
+
+    /**
+     * Finally, the signature is calculated by passing the signature base string and signing key to the
+     * HMAC-SHA1 hashing algorithm.
+     *
+     * The output of the HMAC signing function is a binary string. This needs to be base64 encoded
+     * to produce the signature string.
+     */
+    (void) HMAC(EVP_sha1(), key->data, key->length, (unsigned char *) base->data, base->length, sig,
+                (unsigned int *) &len);
+
+    builder->oauth_signature.value = base64_bytes(sig, len);
+    curl_encode(builder->oauth_signature.value, &builder->oauth_signature.encoded_value);
+
+    BIO_set_close(mem, BIO_CLOSE);
+    BIO_free_all(mem);
+
+    free(lst);
+    BUF_MEM_free(key);
+    BUF_MEM_free(base);
+}
+
+/**
+ * @brief      Gets the signing key.
+ * 
+ * @details    The value which identifies your application to Twitter is called the
+ * consumer secret and can be found by going to dev.twitter.com/apps and viewing the 
+ * settings page for your application. This will be the same for every request your 
+ * application sends.
+ * 
+ * @example    Consumer secret kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw
+ * 
+ * The value which identifies the account your application is acting on behalf of is called 
+ * the oauth token secret. This value can be obtained in several ways, all of which are 
+ * described at Obtaining access tokens.
+ * 
+ * @example    OAuth token secret  LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE
+ * 
+ * Both of these values need to be combined to form a *signing key* which will be used to 
+ * generate the signature. The signing key is simply the percent encoded consumer secret, 
+ * followed by an ampersand character ‘&’, followed by the percent encoded token secret
+ * 
+ * Note that there are some flows, such as when obtaining a request token, where the token 
+ * secret is not yet known. In this case, the signing key should consist of the [percent 
+ * encoded](https://dev.twitter.com/oauth/overview/percent-encoding-parameters) *consumer secret* followed by an ampersand character ‘&’.
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The signing key.
+ */
+static BUF_MEM *
+get_signing_key(const Builder *builder) {
+    BIO *mem = NULL;
+    BUF_MEM *bptr = NULL;
+
+    mem = BIO_new(BIO_s_mem());
+    if (mem) {
+        BIO_write(mem, builder->consumer_secret.encoded_value, strlen(builder->consumer_secret.encoded_value));
+        BIO_write(mem, "&", 1);
+        BIO_write(mem, builder->token_secret.encoded_value, strlen(builder->token_secret.encoded_value));
+    }
+
+    BIO_get_mem_ptr(mem, bptr);
+    BIO_set_close(mem, BIO_NOCLOSE);
+    BIO_free_all(mem);
+
+    return bptr;
 }
 
 /**
@@ -384,9 +375,11 @@ set_oauth_signature(Builder *builder) {
 static void
 collect_parameters(const Builder *builder, Param ***dest, int *size) {
     static const int OAUTH_MEMBERS_COUNT = 6;
-    const Param **lst = malloc(sizeof(Param *) * (*size));
+    const Param **lst;
     int i;
     *size = OAUTH_MEMBERS_COUNT + builder->req_params_size;
+
+    lst = malloc(sizeof(Param *) * (*size));
 
     lst[0] = &builder->oauth_consumer_key;
     lst[1] = &builder->oauth_nonce;
@@ -395,12 +388,55 @@ collect_parameters(const Builder *builder, Param ***dest, int *size) {
     lst[4] = &builder->oauth_token;
     lst[5] = &builder->oauth_version;
 
-    for (i = OAUTH_MEMBERS_COUNT; i < size; ++i) {
+    for (i = OAUTH_MEMBERS_COUNT; i < *size; ++i) {
         lst[i] = &builder->request_params[i - OAUTH_MEMBERS_COUNT];
     }
 
-    qsort(lst, size, sizeof lst[0], compare);
+    qsort(lst, (unsigned int) *size, sizeof lst[0], compare);
     *dest = lst;
+}
+
+/**
+ * @brief      Creates a signature base.
+ * 
+ * @details    The three values collected so far must be joined to make a single string, from 
+ * which the signature will be generated. This is called the *signature base* string 
+ * by the OAuth specification.
+ * 
+ * To encode the HTTP method, base URL, and parameter string into a single string:
+ *     1. Convert the HTTP Method to uppercase and set the output string equal to this value.
+ *     2. Append the ‘&’ character to the output string.
+ *     3. Percent encode the URL and append it to the output string.
+ *     4. Append the ‘&’ character to the output string.
+ *     5. Percent encode the parameter string and append it to the output string.
+ *
+ * @param[in]  builder           The builder
+ * @param[in]  parameter_string  The parameter string
+ * @param[in]  len               The length
+ *
+ * @return     A buffer containing the signature base
+ */
+static BUF_MEM *
+create_signature_base(const Builder *builder, const char *parameter_string, size_t len) {
+    BIO *mem = NULL;
+    BUF_MEM *bptr = NULL;
+    char *encoded_param;
+    curl_encode_len(parameter_string, len, &encoded_param);
+
+    mem = BIO_new(BIO_s_mem());
+    if (mem) {
+        BIO_write(mem, builder->http_method.value, strlen(builder->http_method.value));
+        BIO_write(mem, "&", 1);
+        BIO_write(mem, builder->base_url.encoded_value, strlen(builder->base_url.encoded_value));
+        BIO_write(mem, "&", 1);
+        BIO_write(mem, encoded_param, strlen(encoded_param));
+    }
+
+    BIO_get_mem_ptr(mem, bptr);
+    BIO_set_close(mem, BIO_NOCLOSE);
+    BIO_free_all(mem);
+
+    return bptr;
 }
 
 /**

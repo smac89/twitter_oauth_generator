@@ -7,16 +7,18 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -ansi -pedantic -g -U__STRICT_ANSI__ \
 -Wno-missing-field-initializers -Wno-long-long -Wswitch-default -Wshadow -Wunreachable-code \
 -Wold-style-definition")
 
+set(CORELIBS crypto curl oauthsign)
 set(SOURCE_FILES
-        liboauthsign.c
-        liboauthsigntw.c
-        logger.c
-        oauth_sign.c)
+        src/liboauthsigntw.c
+        src/liboauthsign.c
+        src/logger.c
+        src/oauth_sign.c)
 
 # Build the liboauthsign
-add_library(oauthsign STATIC liboauthsign.c)
-
-set(CORELIBS crypto curl oauthsign)
+add_library(oauthsign STATIC src/liboauthsign.c)
 
 add_executable(oauth_sign ${SOURCE_FILES})
 target_link_libraries(oauth_sign ${CORELIBS})
+
+# This is a library to help with testing
+# https://github.com/ThrowTheSwitch/Unity/tree/master/src
