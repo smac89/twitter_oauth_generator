@@ -35,6 +35,13 @@
     X(Param,  oauth_token) \
     X(Param,  oauth_version)
 
+/**
+ * @brief      This X function is used to count the number of members
+ */
+#define X(_, __) +1
+static const int OAUTH_MEMBERS_COUNT = 0 X_BUILDER_OAUTH_MEMBERS;
+#undef X
+
 static CURL *curl;
 static int BUILDER_REF_COUNT = 0;
 
@@ -95,6 +102,8 @@ get_header_string(Builder *builder) {
     BIO *mem = NULL;
     BUF_MEM *bptr = NULL;
 
+    int count = 0;
+
     set_nonce(builder);
     set_signature_method(builder);
     set_timestamp(builder);
@@ -105,12 +114,23 @@ get_header_string(Builder *builder) {
 
     mem = BIO_new(BIO_s_mem());
     BIO_write(mem, "OAuth ", 6);
+#define X(_, member) count++; \
+    BIO_write(mem, builder->member.encoded_name, strlen(builder->member.encoded_name)); \
+    BIO_write(mem, "=\"", 2); \
+    BIO_write(mem, builder->member.encoded_value, strlen(builder->member.encoded_value)); \
+    BIO_write(mem, "\"", 1); \
+    if (count < OAUTH_MEMBERS_COUNT) { \
+        BIO_write(mem, ", ", 2); \
+    }
 
+    X_BUILDER_OAUTH_MEMBERS
+#undef X
 
+    BIO_get_mem_ptr(mem, bptr);
+    BIO_set_close(mem, BIO_NOCLOSE);
+    BIO_free_all(mem);
 
-    /* signature method */
-
-    return NULL;
+    return bptr->data;
 }
 
 void
@@ -163,7 +183,8 @@ set_base_url(Builder *builder, const char *key) {
 
 void
 set_request_params(Builder *builder, const char **params, int length) {
-    int c, d;
+    int c;
+    size_t d;
     const char *value;
 
     builder->request_params = malloc(sizeof(Param) * length);
@@ -199,7 +220,6 @@ new_oauth_builder(void) {
 /**
  * @brief      This X function initializes some of the struct members
  *
- * @param      _       Unused
  * @param      member  The name of the member
  */
 #define X(_, member) {#member, NULL, NULL, NULL},
@@ -216,7 +236,6 @@ new_oauth_builder(void) {
 /**
  * @brief      This X function percent-encodes some of the struct members
  *
- * @param      _    Unused
  * @param      member  The member
  */
 #define X(_, member) curl_encode(temp.member.name, &temp.member.encoded_name);
@@ -251,7 +270,6 @@ destroy_builder(Builder **builder) {
 /**
  * @brief      This X function frees some of the struct members
  *
- * @param      _       Unused
  * @param      member  The member
  */
 #define X(_, member) free_param(&ref->member);
@@ -385,23 +403,17 @@ get_signing_key(const Builder *builder) {
  */
 static BUF_MEM *
 collect_parameters(const Builder *builder) {
-/**
- * @brief      This X function is used to count the number of members
- */
-#define X(_, __) +1
-    static const int OAUTH_MEMBERS_COUNT = -1/* Start at -1 because we don't use oauth_signature here */
-                                           X_BUILDER_OAUTH_MEMBERS;
-#undef X
-
     BIO *mem = NULL;
     BUF_MEM *bptr = NULL;
-    int size = OAUTH_MEMBERS_COUNT + builder->req_params_size, i;
+    int members_cnt = OAUTH_MEMBERS_COUNT - 1; /* -1 because we don't use oauth_signature here */
+    int size = members_cnt + builder->req_params_size, i;
 
     const Param **lst = malloc(sizeof(Param *) * size);
 
     /* Didn't use X-functions here because we don't have
      oauth_signature yet
      */
+
     lst[0] = &builder->oauth_consumer_key;
     lst[1] = &builder->oauth_nonce;
     lst[2] = &builder->oauth_signature_method;
@@ -409,7 +421,7 @@ collect_parameters(const Builder *builder) {
     lst[4] = &builder->oauth_token;
     lst[5] = &builder->oauth_version;
 
-    for (i = OAUTH_MEMBERS_COUNT; i < size; ++i) {
+    for (i = members_cnt; i < size; ++i) {
         lst[i] = &builder->request_params[i - OAUTH_MEMBERS_COUNT];
     }
 
