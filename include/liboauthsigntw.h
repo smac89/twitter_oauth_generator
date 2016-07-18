@@ -5,6 +5,8 @@ typedef struct OauthBuilder Builder;
 
 /**
  * @brief      Creates a new builder object
+ * @details    A call to destroy_builder() must follow after making use of this
+ * object
  *
  * @return     a builder for collecting the required parameters
  */
@@ -22,7 +24,7 @@ Builder *new_oauth_builder(void);
  * @param      builder  The builder
  * @param[in]  key      The key
  */
-void set_consumer_key(Builder *, const char *);
+void set_consumer_key(Builder *builder, const char *key);
 
 /**
  * @brief      Sets the consumer secret.
@@ -30,7 +32,7 @@ void set_consumer_key(Builder *, const char *);
  * @param      builder  The builder
  * @param[in]  key      The secret
  */
-void set_consumer_secret(Builder *, const char *);
+void set_consumer_secret(Builder *builder, const char *key);
 
 /**
  * @brief      Sets the token.
@@ -49,7 +51,7 @@ void set_consumer_secret(Builder *, const char *);
  * @param      builder  The builder
  * @param[in]  key      The token
  */
-void set_token(Builder *, const char *);
+void set_token(Builder *builder, const char *key);
 
 /**
  * @brief      Sets the token secret.
@@ -57,7 +59,7 @@ void set_token(Builder *, const char *);
  * @param      builder  The builder
  * @param[in]  key      The token secret
  */
-void set_token_secret(Builder *, const char *);
+void set_token_secret(Builder *builder, const char *key);
 
 /**
  * @brief      Sets the http method.
@@ -68,7 +70,7 @@ void set_token_secret(Builder *, const char *);
  * @param      builder  The builder
  * @param[in]  key      The http method
  */
-void set_http_method(Builder *, const char *);
+void set_http_method(Builder *builder, const char *key);
 
 /**
  * @brief      Sets the base url.
@@ -82,21 +84,22 @@ void set_http_method(Builder *, const char *);
  * @param      builder  The builder
  * @param[in]  key      The url
  */
-void set_base_url(Builder *, const char *);
+void set_base_url(Builder *builder, const char *key);
 
 /**
  * @brief      Sets the request parameters.
  *
  * @param      builder  The builder
  * @param      params   The parameters
- * @param[in]  length    The length
+ * @param[in]  length    The length of the parameters
  */
-void set_request_params(Builder *builder, const char **params, int len);
+void set_request_params(Builder *builder, const char **params, int length);
 
 /**
  * @brief      Gets the header string.
+ * @details    The returned string must be freed after use
  *
- * @param[in]  builder  The builder with all the required parameters
+ * @param      builder  The builder
  *
  * @return     The header string.
  */
