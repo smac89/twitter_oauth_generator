@@ -14,30 +14,47 @@
 #include "liboauthsign.h"
 #include "liboauthsigntw.h"
 
-#define FREE_IF_NOT_NULL(obj) do { if (obj != NULL) free(obj); } while (0)
+#define FREE_IF_NOT_NULL(obj) do { if ((obj) != NULL) free(obj); } while (0)
 #define STRDUP_CHECK_ASSIGN(rhs, str, fail) do { char* tmp = strdup( str ); if ( tmp == (char*) 0 ) return fail; rhs = tmp; } while (0)
+
+/**
+ * This is an X-MACRO which helps in reducing the amount of time
+ * spent retyping these members in the code
+ * 
+ * @details    To make use of these, simply define an X function which takes
+ * a two arguements - type and name and then do whatever you want with them
+ * 
+ * @example    Examples of using these can be found in the code
+ */
+#define X_BUILDER_OAUTH_MEMBERS \
+    X(Param,  oauth_consumer_key) \
+    X(Param,  oauth_nonce) \
+    X(Param,  oauth_signature) \
+    X(Param,  oauth_signature_method) \
+    X(Param,  oauth_timestamp) \
+    X(Param,  oauth_token) \
+    X(Param,  oauth_version)
 
 static CURL *curl;
 static int BUILDER_REF_COUNT = 0;
 
 struct OauthBuilder {
-    Param oauth_consumer_key;
-    Param oauth_nonce;
-    Param oauth_signature;
-    Param oauth_signature_method;
-    Param oauth_timestamp;
-    Param oauth_token;
-    Param oauth_version;
 
+/**
+ * @brief      This X function creates some struct members
+ *
+ * @param      type  The type
+ * @param      name  The name of the member
+ */
+#define X(type, name) type name;
+    X_BUILDER_OAUTH_MEMBERS
+#undef X
     Param consumer_secret;
     Param token_secret;
     Param http_method;
     Param base_url;
     Param *request_params;
     int req_params_size;
-
-/*    consumer_secret, token_secret, method, url*/
-    char *rest[4];
 };
 
 static char *base64_bytes(unsigned char *src, int src_size);
@@ -56,6 +73,8 @@ static BUF_MEM *create_signature_base(const Builder *builder, const char *parame
 
 static BUF_MEM *get_signing_key(const Builder *builder);
 
+static BUF_MEM *collect_parameters(const Builder *builder);
+
 static void free_param(Param *param);
 
 static void set_nonce(Builder *builder);
@@ -68,13 +87,14 @@ static void set_oauth_version(Builder *builder);
 
 static void set_signature(Builder *builder);
 
-static void collect_parameters(const Builder *builder, Param ***dest, int *size);
-
 static int compare(const void *v1, const void *v2);
 
 
 const char *
 get_header_string(Builder *builder) {
+    BIO *mem = NULL;
+    BUF_MEM *bptr = NULL;
+
     set_nonce(builder);
     set_signature_method(builder);
     set_timestamp(builder);
@@ -82,6 +102,11 @@ get_header_string(Builder *builder) {
 
     /* Done last in order to have the values needed*/
     set_signature(builder);
+
+    mem = BIO_new(BIO_s_mem());
+    BIO_write(mem, "OAuth ", 6);
+
+
 
     /* signature method */
 
@@ -169,43 +194,34 @@ set_request_params(Builder *builder, const char **params, int length) {
 Builder *
 new_oauth_builder(void) {
     Builder *builder = malloc(sizeof(Builder));
-    Builder temp = {{NULL, NULL, NULL, NULL}, {NULL, NULL, NULL, NULL},
-                    {NULL, NULL, NULL, NULL}, {NULL, NULL, NULL, NULL},
-                    {NULL, NULL, NULL, NULL}, {NULL, NULL, NULL, NULL},
-                    {NULL, NULL, NULL, NULL}, {NULL, NULL, NULL, NULL},
-                    {NULL, NULL, NULL, NULL}, {NULL, NULL, NULL, NULL},
-                    {NULL, NULL, NULL, NULL}, NULL, 0,
-                    {NULL, NULL, NULL, NULL, NULL}
+    Builder temp = {
+
+/**
+ * @brief      This X function initializes some of the struct members
+ *
+ * @param      _       Unused
+ * @param      member  The name of the member
+ */
+#define X(_, member) {#member, NULL, NULL, NULL},
+            X_BUILDER_OAUTH_MEMBERS
+#undef X
+            {NULL, NULL, NULL, NULL},
+            {NULL, NULL, NULL, NULL},
+            {NULL, NULL, NULL, NULL},
+            {NULL, NULL, NULL, NULL},
+            NULL,
+            0
     };
 
-    temp.oauth_consumer_key.name = oauth_strdup("oauth_consumer_key");
-    temp.oauth_nonce.name = oauth_strdup("oauth_nonce");
-    temp.oauth_signature.name = oauth_strdup("oauth_signature");
-    temp.oauth_signature_method.name = oauth_strdup("oauth_signature_method");
-    temp.oauth_timestamp.name = oauth_strdup("oauth_timestamp");
-    temp.oauth_token.name = oauth_strdup("oauth_token");
-    temp.oauth_version.name = oauth_strdup("oauth_version");
-
-    curl_encode(temp.oauth_consumer_key.name,
-                &temp.oauth_consumer_key.encoded_name);
-
-    curl_encode(temp.oauth_nonce.name,
-                &temp.oauth_nonce.encoded_name);
-
-    curl_encode(temp.oauth_signature.name,
-                &temp.oauth_signature.encoded_name);
-
-    curl_encode(temp.oauth_signature_method.name,
-                &temp.oauth_signature_method.encoded_name);
-
-    curl_encode(temp.oauth_timestamp.name,
-                &temp.oauth_timestamp.encoded_name);
-
-    curl_encode(temp.oauth_token.name,
-                &temp.oauth_token.encoded_name);
-
-    curl_encode(temp.oauth_version.name,
-                &temp.oauth_version.encoded_name);
+/**
+ * @brief      This X function percent-encodes some of the struct members
+ *
+ * @param      _    Unused
+ * @param      member  The member
+ */
+#define X(_, member) curl_encode(temp.member.name, &temp.member.encoded_name);
+    X_BUILDER_OAUTH_MEMBERS
+#undef X
 
     memcpy(builder, &temp, sizeof(Builder));
 
@@ -221,17 +237,26 @@ destroy_builder(Builder **builder) {
 
     if (*builder != NULL && BUILDER_REF_COUNT > 0) {
         Builder *ref = *builder;
-        int i;
-        for (i = 0; i < 5; i++) {
-            FREE_IF_NOT_NULL(ref->rest[i]);
+        if (ref->request_params != NULL) {
+            int i;
+            for (i = 0; i < ref->req_params_size; ++i) {
+                free_param(&ref->request_params[i]);
+            }
+            ref->request_params = NULL;
         }
-        free_param(&ref->oauth_version);
-        free_param(&ref->oauth_token);
-        free_param(&ref->oauth_timestamp);
-        free_param(&ref->oauth_signature_method);
-        free_param(&ref->oauth_signature);
-        free_param(&ref->oauth_nonce);
-        free_param(&ref->oauth_consumer_key);
+        free_param(&ref->base_url);
+        free_param(&ref->http_method);
+        free_param(&ref->token_secret);
+        free_param(&ref->consumer_secret);
+/**
+ * @brief      This X function frees some of the struct members
+ *
+ * @param      _       Unused
+ * @param      member  The member
+ */
+#define X(_, member) free_param(&ref->member);
+        X_BUILDER_OAUTH_MEMBERS
+#undef X
 
         free(*builder);
 
@@ -253,18 +278,7 @@ destroy_builder(Builder **builder) {
  * authorization to interact with the user’s account.
  * The process for calculating the oauth_signature for this request is described in
  * [Creating a signature](https://dev.twitter.com/oauth/overview/creating-signatures)
- * 
- * 1. Percent encode every key and value that will be signed.
- * 2. Sort the list of parameters alphabetically[1] by encoded key[2].
- *     [2] Note: In case of two parameters with the same encoded key, the 
- *     OAuth spec says to continue sorting based on value. However, 
- *     Twitter does not accept duplicate keys in API requests.
- * 3. For each key/value pair:
- *     a. Append the encoded key to the output string.
- *     b. Append the ‘=’ character to the output string.
- *     c. Append the encoded value to the output string.
- *     d. If there are more key/value pairs remaining, append a 
- *     ‘&’ character to the output string.
+ *
  * 
  * @example    oauth_signature  tnnArxj06cWHq44gCs1OSKk/jLY=
  *
@@ -272,26 +286,12 @@ destroy_builder(Builder **builder) {
  */
 static void
 set_signature(Builder *builder) {
-    BIO *mem = NULL;
     BUF_MEM *bptr = NULL, *base = NULL, *key = NULL;
     unsigned char sig[SHA_DIGEST_LENGTH] = {0};
 
-    int size, len, i;
-    Param **lst;
+    int len;
 
-    collect_parameters(builder, &lst, &size);
-
-    mem = BIO_new(BIO_s_mem());
-    for (i = 0; i < size; ++i) {
-        (void) BIO_write(mem, lst[i]->encoded_name, strlen(lst[i]->encoded_name));
-        (void) BIO_write(mem, "=", 1);
-        (void) BIO_write(mem, lst[i]->encoded_value, strlen(lst[i]->encoded_value));
-        if (i + 1 < size) {
-            (void) BIO_write(mem, "&", 1);
-        }
-    }
-
-    BIO_get_mem_ptr(mem, bptr);
+    bptr = collect_parameters(builder);
 
     base = create_signature_base(builder, bptr->data, bptr->length);
     key = get_signing_key(builder);
@@ -309,12 +309,9 @@ set_signature(Builder *builder) {
     builder->oauth_signature.value = base64_bytes(sig, len);
     curl_encode(builder->oauth_signature.value, &builder->oauth_signature.encoded_value);
 
-    BIO_set_close(mem, BIO_CLOSE);
-    BIO_free_all(mem);
-
-    free(lst);
     BUF_MEM_free(key);
     BUF_MEM_free(base);
+    BUF_MEM_free(bptr);
 }
 
 /**
@@ -365,22 +362,46 @@ get_signing_key(const Builder *builder) {
 }
 
 /**
- * @brief      Collects the parameters required to build the signature
+ * @brief      Gets the parameters
+ *
+ * @details    In the HTTP request the parameters are URL encoded, but you should collect 
+ * the raw values. In addition to the request parameters, every *oauth_** parameter needs to be included 
+ * in the signature, so collect those too.
+ * 
+ * 1. Percent encode every key and value that will be signed.
+ * 2. Sort the list of parameters alphabetically[1] by encoded key[2].
+ *     [2] Note: In case of two parameters with the same encoded key, the
+ *     OAuth spec says to continue sorting based on value. However,
+ *     Twitter does not accept duplicate keys in API requests.
+ * 3. For each key/value pair:
+ *     a. Append the encoded key to the output string.
+ *     b. Append the ‘=’ character to the output string.
+ *     c. Append the encoded value to the output string.
+ *     d. If there are more key/value pairs remaining, append a '&' character to the output string.
  *
  * @param[in]  builder  The builder
- * @param      dest     The destination should be a reference to array of (Param*)
- * @param      size     The size is a reference to an int where the size of the
- * returned array can be stored
+ *
+ * @return     A pointer to a buffer holding the parameter string
  */
-static void
-collect_parameters(const Builder *builder, Param ***dest, int *size) {
-    static const int OAUTH_MEMBERS_COUNT = 6;
-    const Param **lst;
-    int i;
-    *size = OAUTH_MEMBERS_COUNT + builder->req_params_size;
+static BUF_MEM *
+collect_parameters(const Builder *builder) {
+/**
+ * @brief      This X function is used to count the number of members
+ */
+#define X(_, __) +1
+    static const int OAUTH_MEMBERS_COUNT = -1/* Start at -1 because we don't use oauth_signature here */
+                                           X_BUILDER_OAUTH_MEMBERS;
+#undef X
 
-    lst = malloc(sizeof(Param *) * (*size));
+    BIO *mem = NULL;
+    BUF_MEM *bptr = NULL;
+    int size = OAUTH_MEMBERS_COUNT + builder->req_params_size, i;
 
+    const Param **lst = malloc(sizeof(Param *) * size);
+
+    /* Didn't use X-functions here because we don't have
+     oauth_signature yet
+     */
     lst[0] = &builder->oauth_consumer_key;
     lst[1] = &builder->oauth_nonce;
     lst[2] = &builder->oauth_signature_method;
@@ -388,12 +409,31 @@ collect_parameters(const Builder *builder, Param ***dest, int *size) {
     lst[4] = &builder->oauth_token;
     lst[5] = &builder->oauth_version;
 
-    for (i = OAUTH_MEMBERS_COUNT; i < *size; ++i) {
+    for (i = OAUTH_MEMBERS_COUNT; i < size; ++i) {
         lst[i] = &builder->request_params[i - OAUTH_MEMBERS_COUNT];
     }
 
-    qsort(lst, (unsigned int) *size, sizeof lst[0], compare);
-    *dest = lst;
+    qsort(lst, (unsigned int) size, sizeof lst[0], compare);
+
+    mem = BIO_new(BIO_s_mem());
+    if (mem) {
+        for (i = 0; i < size; ++i) {
+            (void) BIO_write(mem, lst[i]->encoded_name, strlen(lst[i]->encoded_name));
+            (void) BIO_write(mem, "=", 1);
+            (void) BIO_write(mem, lst[i]->encoded_value, strlen(lst[i]->encoded_value));
+            if (i + 1 < size) {
+                (void) BIO_write(mem, "&", 1);
+            }
+        }
+
+        BIO_get_mem_ptr(mem, bptr);
+        BIO_set_close(mem, BIO_NOCLOSE);
+        BIO_free_all(mem);
+    }
+
+    free(lst);
+
+    return bptr;
 }
 
 /**
@@ -454,7 +494,7 @@ compare(const void *v1, const void *v2) {
     const Param *p1 = (const Param *) v1;
     const Param *p2 = (const Param *) v2;
     int r = strcmp(p1->encoded_name, p2->encoded_name);
-    if (r == 0) /* This should never happen, but just
+    if (r == 0) /* (r == 0) This should never happen, but just
                    * for the sake of completeness, we will leave this in */
         r = strcmp(p1->encoded_value, p2->encoded_value);
     return r;
@@ -528,9 +568,9 @@ set_signature_method(Builder *builder) {
  */
 static void
 set_timestamp(Builder *builder) {
-    time_t now;
+    time_t now = time(NULL);
     char timestamp[20];
-    (void) snprintf(timestamp, sizeof timestamp, "%ld", (long) now);
+    (void) snprintf(timestamp, sizeof timestamp, "%ld", (long int) now);
     builder->oauth_timestamp.value = oauth_strdup(timestamp);
 
     curl_encode(builder->oauth_timestamp.value,
@@ -603,7 +643,7 @@ base64_bytes(unsigned char *src, int src_size) {
     BIO_get_mem_ptr(mem, &bptr);
 
     /*Allocate memory for the internal buffer and copy it to the new location*/
-    STRDUP_CHECK_ASSIGN(bytes, bptr->data, (char *) 0);
+    bytes = oauth_strdup(bptr->data);
 
     /*Cleanup*/
     BIO_set_close(mem, BIO_CLOSE);
