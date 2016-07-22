@@ -27,12 +27,32 @@ Builder *new_oauth_builder(void);
 void set_consumer_key(Builder *builder, const char *key);
 
 /**
+ * @brief      Gets the consumer key.
+ * The user is responsible for freeing the array
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The consumer key.
+ */
+char *get_consumer_key(const Builder *builder);
+
+/**
  * @brief      Sets the consumer secret.
  *
  * @param      builder  The builder
  * @param[in]  key      The secret
  */
 void set_consumer_secret(Builder *builder, const char *key);
+
+/**
+ * @brief      Gets the consumer secret.
+ * The user is responsible for freeing the array
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The consumer secret.
+ */
+char *get_consumer_secret(const Builder *builder);
 
 /**
  * @brief      Sets the token.
@@ -54,12 +74,32 @@ void set_consumer_secret(Builder *builder, const char *key);
 void set_token(Builder *builder, const char *key);
 
 /**
+ * @brief      Gets the token.
+ * The user is responsible for freeing the array
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The token.
+ */
+char *get_token(const Builder *builder);
+
+/**
  * @brief      Sets the token secret.
  *
  * @param      builder  The builder
  * @param[in]  key      The token secret
  */
 void set_token_secret(Builder *builder, const char *key);
+
+/**
+ * @brief      Gets the token secret.
+ * The user is responsible for freeing the array
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The token secret.
+ */
+char *get_token_secret(const Builder *builder);
 
 /**
  * @brief      Sets the http method.
@@ -71,6 +111,16 @@ void set_token_secret(Builder *builder, const char *key);
  * @param[in]  key      The http method
  */
 void set_http_method(Builder *builder, const char *key);
+
+/**
+ * @brief      Gets the http method.
+ * The user is responsible for freeing the array
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The http method.
+ */
+char *get_http_method(const Builder *builder);
 
 /**
  * @brief      Sets the base url.
@@ -87,6 +137,16 @@ void set_http_method(Builder *builder, const char *key);
 void set_base_url(Builder *builder, const char *key);
 
 /**
+ * @brief      Gets the base url.
+ * The user is responsible for freeing the array
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The base url.
+ */
+char *get_base_url(const Builder *builder);
+
+/**
  * @brief      Sets the request parameters.
  *
  * @param      builder  The builder
@@ -96,14 +156,72 @@ void set_base_url(Builder *builder, const char *key);
 void set_request_params(Builder *builder, const char **params, int length);
 
 /**
+ * @brief      Gets the request params.
+ * The user is responsible for freeing the pointers within the array as well
+ * as the array itself
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The request params.
+ */
+char **get_request_params(const Builder *builder);
+
+/**
  * @brief      Gets the header string.
- * @details    The returned string must be freed after use
+ * The returned string must be freed after use
  *
  * @param      builder  The builder
  *
  * @return     The header string.
  */
-const char *get_header_string(Builder *builder);
+char *get_header_string(Builder *builder);
+
+#ifdef LOAUTHSIGN_DEBUG
+
+/**
+ * @brief      Gets the nonce.
+ * The returned string must be freed after use
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The nonce.
+ */
+char *get_nonce(const Builder *builder);
+
+/**
+ * @brief      Gets the oauth version.
+ * The returned string must be freed after use
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The oauth version.
+ */
+char *get_oauth_version(const Builder *builder);
+
+/**
+ * @brief      Gets the signature.
+ * 
+ * @details    This should be called after all the setters
+ * in order for the properties needed to create the signature to be ready.
+ * Also the returned string must be freed after use
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The signature.
+ */
+char *get_signature(const Builder *builder);
+
+/**
+ * @brief      Gets the timestamp.
+ * The returned string must be freed after use
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The timestamp.
+ */
+char *get_timestamp(const Builder *builder);
+
+#endif /* LOAUTHSIGN_DEBUG */
 
 /**
  * @brief      Destroys a builder.

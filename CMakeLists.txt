@@ -13,8 +13,4 @@ enable_testing()
 
 add_subdirectory(src)
 add_subdirectory(liboauthsign.tw)
-add_subdirectory(tools)
 add_subdirectory(test)
-
-# This is a library to help with testing
-# https://github.com/ThrowTheSwitch/Unity/tree/master/src

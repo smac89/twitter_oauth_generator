@@ -97,7 +97,7 @@ static void set_signature(Builder *builder);
 static int compare(const void *v1, const void *v2);
 
 
-const char *
+char *
 get_header_string(Builder *builder) {
     BIO *mem = NULL;
     BUF_MEM *bptr = NULL;
@@ -284,6 +284,59 @@ destroy_builder(Builder **builder) {
         }
     }
 }
+
+char *get_base_url(const Builder *builder) {
+    return oauth_strdup(builder->base_url.value);
+}
+
+char *get_consumer_key(const Builder *builder) {
+    return oauth_strdup(builder->oauth_consumer_key.value);
+}
+
+char *get_consumer_secret(const Builder *builder) {
+    return oauth_strdup(builder->consumer_secret.value);
+}
+
+char *get_http_method(const Builder *builder) {
+    return oauth_strdup(builder->http_method.value);
+}
+
+char **get_request_params(const Builder *builder) {
+    char **params = malloc(sizeof(char *) * builder->req_params_size);
+    int c;
+    for (c = 0; c < builder->req_params_size; ++c) {
+        params[c] = oauth_strdup(builder->request_params[c].value);
+    }
+    return params;
+}
+
+char *get_token(const Builder *builder) {
+    return oauth_strdup(builder->oauth_token.value);
+}
+
+char *get_token_secret(const Builder *builder) {
+    return oauth_strdup(builder->token_secret.value);
+}
+
+#ifdef LOAUTHSIGN_DEBUG
+
+char *get_nonce(const Builder *builder) {
+    return oauth_strdup(builder->oauth_nonce.value);
+}
+
+char *get_oauth_version(const Builder *builder) {
+    return oauth_strdup(builder->oauth_version.value);
+}
+
+char *get_signature(const Builder *builder) {
+    return oauth_strdup(builder->oauth_signature.value);
+}
+
+char *get_timestamp(const Builder *builder) {
+    return oauth_strdup(builder->oauth_timestamp.value);
+}
+
+#endif
 
 /**
  * @brief      Sets the oauth signature.
