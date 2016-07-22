@@ -371,11 +371,11 @@ get_signing_key(const Builder *builder) {
         BIO_write(mem, builder->consumer_secret.encoded_value, strlen(builder->consumer_secret.encoded_value));
         BIO_write(mem, "&", 1);
         BIO_write(mem, builder->token_secret.encoded_value, strlen(builder->token_secret.encoded_value));
-    }
 
-    BIO_get_mem_ptr(mem, bptr);
-    BIO_set_close(mem, BIO_NOCLOSE);
-    BIO_free_all(mem);
+        BIO_get_mem_ptr(mem, bptr);
+        BIO_set_close(mem, BIO_NOCLOSE);
+        BIO_free_all(mem);
+    }
 
     return bptr;
 }
@@ -484,11 +484,11 @@ create_signature_base(const Builder *builder, const char *parameter_string, size
         BIO_write(mem, builder->base_url.encoded_value, strlen(builder->base_url.encoded_value));
         BIO_write(mem, "&", 1);
         BIO_write(mem, encoded_param, strlen(encoded_param));
-    }
 
-    BIO_get_mem_ptr(mem, bptr);
-    BIO_set_close(mem, BIO_NOCLOSE);
-    BIO_free_all(mem);
+        BIO_get_mem_ptr(mem, bptr);
+        BIO_set_close(mem, BIO_NOCLOSE);
+        BIO_free_all(mem);
+    }
 
     free(encoded_param);
 

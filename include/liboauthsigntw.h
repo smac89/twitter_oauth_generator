@@ -1,5 +1,5 @@
-#ifndef LIB_TWITTER_OAUTH_SIGN_TW_H
-#define LIB_TWITTER_OAUTH_SIGN_TW_H
+#ifndef LIB_OAUTH_SIGN_TW_H
+#define LIB_OAUTH_SIGN_TW_H
 
 typedef struct OauthBuilder Builder;
 
@@ -113,4 +113,4 @@ const char *get_header_string(Builder *builder);
  */
 void destroy_builder(Builder **builder);
 
-#endif /*LIB_TWITTER_OAUTH_SIGN_TW_H*/
+#endif /*LIB_OAUTH_SIGN_TW_H*/

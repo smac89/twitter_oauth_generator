@@ -44,3 +44,4 @@
 *.su
 .idea/
 token.c
+test/

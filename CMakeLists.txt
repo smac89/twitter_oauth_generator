@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 project(oauth_sign)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -ansi -pedantic -g -U__STRICT_ANSI__ \
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -std=c99 -pedantic -g -U__STRICT_ANSI__ \
 -Wall -Wextra -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes \
 -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wbad-function-cast \
 -Wno-missing-field-initializers -Wno-long-long -Wswitch-default -Wshadow -Wunreachable-code \
@@ -9,9 +9,12 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -ansi -pedantic -g -U__STRICT_ANSI__ \
 
 include_directories(include)
 
+enable_testing()
+
 add_subdirectory(src)
-add_subdirectory(lib)
-add_subdirectory(util)
+add_subdirectory(liboauthsign.tw)
+add_subdirectory(tools)
+add_subdirectory(test)
 
 # This is a library to help with testing
 # https://github.com/ThrowTheSwitch/Unity/tree/master/src
