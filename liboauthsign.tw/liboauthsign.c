@@ -148,7 +148,7 @@ oauth_sign(int query_mode, char *consumer_key, const char *consumer_key_secret, 
     n_query_params = 0;
     if (qmark != (char *) 0) {
         cp = query_string;
-        for (; ;) {
+        for (;;) {
             equal = strchr(cp, '=');
             amper = strchr(cp, '&');
             if (equal == (char *) 0 || (amper != (char *) 0 && amper < equal)) {

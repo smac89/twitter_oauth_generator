@@ -1,6 +1,6 @@
 #include <stdarg.h>
 #include <stdio.h>
-#include "logger.h"
+#include <logger.h>
 
 void o_log(const char *message, ...) {
     va_list args;
