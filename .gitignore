@@ -43,4 +43,4 @@
 *.dSYM/
 *.su
 .idea/
-token.c
+build/
