@@ -1,0 +1,12 @@
+language: c
+
+compile:
+  - clang
+  - gcc
+
+script:
+  - ./configure
+  - pushd build
+  - make tw_oauthsign_test
+  - popd
+  - ./tw_oauthsign_test

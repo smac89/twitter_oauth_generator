@@ -183,7 +183,7 @@ static int check_method(char *method) {
 }
 
 static void usage(void) {
-    e_log("usage:  %s [-q|-b] "
+    e_log("usage:  %s [-q|-b|-cc] "
           "<consumer_key> <consumer_key_secret> "
           "<token> <token_secret> <method< <url> "
           "[name=value ...]\n",

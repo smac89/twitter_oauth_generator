@@ -5,8 +5,8 @@ add_library(cmocka SHARED IMPORTED)
 set_property(TARGET cmocka PROPERTY IMPORTED_LOCATION "${CMOCKA_LIBRARY}")
 
 # Create and link the testing file to cmocka
-add_executable(oauthsigntwtest liboauthsign_test.c)
-target_link_libraries(oauthsigntwtest oauthsign cmocka)
+add_executable(tw_oauthsign_test liboauthsign_test.c)
+target_link_libraries(tw_oauthsign_test oauthsign cmocka)
 
 # Add this as a test for ctest
-add_test(TEST_LIB_OAUTH oauthsigntwtest)
+add_test(TEST_LIB_OAUTH tw_oauthsign_test)

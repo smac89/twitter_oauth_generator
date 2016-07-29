@@ -30,16 +30,21 @@ See the manual entry for more details.
 
 Files in this distribution:
 
-    README		this
-    Makefile		guess
-    oauth_sign.c	source file
-    oauth_sign.1	manual entry
-    liboauthsign.h	library include file
-    liboauthsign.c	library source file
+    ├── include
+    │   ├── liboauthsign.h
+    │   └── logger.h
+    ├── src
+    │   ├── CMakeLists.txt
+    │   └── oauth_sign.c
+    ├── test
+    │   ├── CMakeLists.txt
+    │   └── liboauthsign_test.c
+    ├── CMakeLists.txt
+    ├── configure.sh
+    ├── liboauthsign.c
+    ├── LICENSE
+    ├── logger.c
+    ├── oauth_sign.1
+    └── README.md
 
-To build: just do a make.
-
-Feedback is welcome - send bug reports, enhancements, checks, money
-orders, etc. to the addresses below.
-
-    Jef Poskanzer  jef@mail.acme.com  http://www.acme.com/jef/
+To build: just run `./configure`
