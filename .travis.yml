@@ -5,7 +5,8 @@ compile:
   - gcc
 
 script:
-  - ./configure
+  - rm -rf build
+  - ./configure.sh
   - pushd build
   - make tw_oauthsign_test
   - popd
