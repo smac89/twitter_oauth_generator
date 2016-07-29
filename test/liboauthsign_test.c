@@ -18,9 +18,13 @@
   X(token, "370773112-GmHxMAgYyLbNEtIKZeRNFsMKPR9EyMZeS9weJAEb") \
   X(token_secret, "LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE") \
   X(http_method, "POST") \
-  X(base_url, "https://api.twitter.com/1/statuses/update.json")
+  X(base_url, "https://api.twitter.com/1/statuses/update.json") \
+  X(nonce, "kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg") \
+  X(signature_method, "HMAC-SHA1") \
+  X(timestamp, "1318622958") \
+  X(oauth_version, "1.0")
 
-typedef struct Builder Builder;
+typedef struct mBuilder Builder;
 
 extern Builder *new_oauth_builder(void);
 extern void destroy_builder(Builder **);
@@ -33,12 +37,11 @@ extern void destroy_builder(Builder **);
 X_DEFAULT_TESTS
 
 extern void set_request_params(Builder *builder, const char **params, int length);
-
 extern char **get_request_params(const Builder *builder);
+
 extern char *get_header_string(Builder *builder);
 
 #undef X
-
 
 /**
  * @brief      Creates a group test builder.
@@ -90,7 +93,10 @@ static void test_get_request_params(void **state) {
     char **value;
     int len, c;
 
-    const char *params[] = {"status=Hello Ladies + Gentlemen, a signed OAuth request!"};
+    const char *params[] = {
+            "status=Hello Ladies + Gentlemen, a signed OAuth request!",
+            "include_entities=true"
+    };
 
     len = sizeof params / sizeof params[0];
 
@@ -110,11 +116,15 @@ static void test_get_request_params(void **state) {
 static void test_get_header_string(void **state) {
     Builder *builder = *state;
 
-    //    char *value = get_header_string(builder);
-    //    assert_string_equal("", value);
-    assert_true(1);
+    char *value = get_header_string(builder);
 
-    //    free(value);
+    assert_string_equal("OAuth oauth_consumer_key=\"xvz1evFS4wEEPTGEFPHBog\", "
+                                "oauth_nonce=\"kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg\", "
+                                "oauth_signature=\"tnnArxj06cWHq44gCs1OSKk%2FjLY%3D\", "
+                                "oauth_signature_method=\"HMAC-SHA1\", oauth_timestamp=\"1318622958\", "
+                                "oauth_token=\"370773112-GmHxMAgYyLbNEtIKZeRNFsMKPR9EyMZeS9weJAEb\", "
+                                "oauth_version=\"1.0\"", value);
+    free(value);
 }
 
 int main(void) {

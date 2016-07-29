@@ -176,53 +176,6 @@ char **get_request_params(const Builder *builder);
  */
 char *get_header_string(Builder *builder);
 
-#ifdef LOAUTHSIGN_DEBUG
-
-/**
- * @brief      Gets the nonce.
- * The returned string must be freed after use
- *
- * @param[in]  builder  The builder
- *
- * @return     The nonce.
- */
-char *get_nonce(const Builder *builder);
-
-/**
- * @brief      Gets the oauth version.
- * The returned string must be freed after use
- *
- * @param[in]  builder  The builder
- *
- * @return     The oauth version.
- */
-char *get_oauth_version(const Builder *builder);
-
-/**
- * @brief      Gets the signature.
- * 
- * @details    This should be called after all the setters
- * in order for the properties needed to create the signature to be ready.
- * Also the returned string must be freed after use
- *
- * @param[in]  builder  The builder
- *
- * @return     The signature.
- */
-char *get_signature(const Builder *builder);
-
-/**
- * @brief      Gets the timestamp.
- * The returned string must be freed after use
- *
- * @param[in]  builder  The builder
- *
- * @return     The timestamp.
- */
-char *get_timestamp(const Builder *builder);
-
-#endif /* LOAUTHSIGN_DEBUG */
-
 /**
  * @brief      Destroys a builder.
  *
@@ -231,4 +184,4 @@ char *get_timestamp(const Builder *builder);
  */
 void destroy_builder(Builder **builder);
 
-#endif /*LIB_OAUTH_SIGN_TW_H*/
+#endif // LIB_OAUTH_SIGN_TW_H

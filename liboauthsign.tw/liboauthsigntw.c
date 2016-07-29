@@ -15,7 +15,6 @@
 #include "liboauthsigntw.h"
 
 #define FREE_IF_NOT_NULL(obj) do { if ((obj) != NULL) free(obj); } while (0)
-#define STRDUP_CHECK_ASSIGN(rhs, str, fail) do { char* tmp = strdup( str ); if ( tmp == (char*) 0 ) return fail; rhs = tmp; } while (0)
 
 /**
  * This is an X-MACRO which helps in reducing the amount of time
@@ -55,83 +54,308 @@ struct OauthBuilder {
  */
 #define X(type, name) type name;
     X_BUILDER_OAUTH_MEMBERS
-#undef X
     Param consumer_secret;
     Param token_secret;
     Param http_method;
     Param base_url;
     Param *request_params;
     int req_params_size;
+#undef X
 };
 
+/**
+ * @brief      Creates a base64 encoding of the given input
+ *             User is responsible for freeing this array after use
+ *
+ * @param      src       The input array or NULL
+ * @param[in]  src_size  The source size
+ *
+ * @return     An array containing the base64 encoding of the given src
+ * or a randomly generated base64 encoding if src was NULL
+ */
 static char *base64_bytes(unsigned char *src, int src_size);
 
+/**
+ * @brief      Creates a copy of a string
+ *             User is responsible for freeing this array after use
+ *
+ * @param[in]  s     The string to copy
+ *
+ * @return     The copy of the string or null if the copying failed
+ */
 static char *oauth_strdup(const char *s);
 
-static char *curl_encode_len(const char *in, size_t length);
+/**
+ * @brief      percent-encodes a given string
+ *             The returned string must be freed after use
+ *
+ * @param[in]  in      The string to encode
+ * @param[in]  length  The length
+ *
+ * @return     The percent encoded string
+ */
+static char *curl_encode_len(const char *in, int length);
 
+/**
+ * @brief      percent-encodes a given string
+ *             The returned string must be freed after use
+ *
+ * @param[in]  in    The string to encode
+ *
+ * @return     The percent encoded string
+ */
 static char *curl_encode(const char *in);
 
-static char *curl_decode_len(const char *in, size_t length);
+/**
+ * @brief      Decodes a given string (opposite of encode)
+ *             The returned string must be freed after use
+ *
+ * @param[in]  in      The encoded string to decode
+ * @param[in]  length  The length of the encoded string
+ *
+ * @return     A decoded string
+ */
+static char *curl_decode_len(const char *in, int length);
 
+/**
+ * @brief      Decodes a given string (opposite of encode)
+ *             The returned string must be freed after use
+ *
+ * @param[in]  in      The encoded string to decode
+ *
+ * @return     A decoded string
+ */
 static char *curl_decode(const char *in);
 
-static BUF_MEM *create_signature_base(const Builder *builder, const char *parameter_string, size_t len);
+/**
+ * @brief      Creates a signature base.
+ *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
+ *
+ * @details    The three values collected so far must be joined to make a single string, from
+ * which the signature will be generated. This is called the *signature base* string
+ * by the OAuth specification.
+ *
+ * To encode the HTTP method, base URL, and parameter string into a single string:
+ *     1. Convert the HTTP Method to uppercase and set the output string equal to this value.
+ *     2. Append the ‘&’ character to the output string.
+ *     3. Percent encode the URL and append it to the output string.
+ *     4. Append the ‘&’ character to the output string.
+ *     5. Percent encode the parameter string and append it to the output string.
+ *
+ * @param[in]  builder           The builder
+ * @param[in]  parameter_string  The parameter string
+ * @param[in]  len               The length
+ *
+ * @return     A buffer containing the signature base
+ */
+static BUF_MEM *create_signature_base(const Builder *builder, const char *parameter_string, int len);
 
+/**
+ * @brief      Gets the signing key.
+ *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
+ *
+ * @details    The value which identifies your application to Twitter is called the
+ * consumer secret and can be found by going to dev.twitter.com/apps and viewing the
+ * settings page for your application. This will be the same for every request your
+ * application sends.
+ *
+ * @example    Consumer secret kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw
+ *
+ * The value which identifies the account your application is acting on behalf of is called
+ * the oauth token secret. This value can be obtained in several ways, all of which are
+ * described at Obtaining access tokens.
+ *
+ * @example    OAuth token secret  LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE
+ *
+ * Both of these values need to be combined to form a *signing key* which will be used to
+ * generate the signature. The signing key is simply the percent encoded consumer secret,
+ * followed by an ampersand character ‘&’, followed by the percent encoded token secret
+ *
+ * Note that there are some flows, such as when obtaining a request token, where the token
+ * secret is not yet known. In this case, the signing key should consist of the [percent
+ * encoded](https://dev.twitter.com/oauth/overview/percent-encoding-parameters) *consumer secret* followed by an ampersand character ‘&’.
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The object holding the signing key
+ */
 static BUF_MEM *get_signing_key(const Builder *builder);
 
+/**
+ * @brief      Gets the parameters
+ *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
+ *
+ * @details    In the HTTP request the parameters are URL encoded, but you should collect
+ * the raw values. In addition to the request parameters, every *oauth_** parameter needs to be included
+ * in the signature, so collect those too.
+ *
+ * 1. Percent encode every key and value that will be signed.
+ * 2. Sort the list of parameters alphabetically[1] by encoded key[2].
+ *     [2] Note: In case of two parameters with the same encoded key, the
+ *     OAuth spec says to continue sorting based on value. However,
+ *     Twitter does not accept duplicate keys in API requests.
+ * 3. For each key/value pair:
+ *     a. Append the encoded key to the output string.
+ *     b. Append the ‘=’ character to the output string.
+ *     c. Append the encoded value to the output string.
+ *     d. If there are more key/value pairs remaining, append a '&' character to the output string.
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     A pointer to a buffer holding the parameter string
+ */
 static BUF_MEM *collect_parameters(const Builder *builder);
 
+/**
+ * @brief      Helper to free the params of a Builder object
+ *
+ * @param      param  A pointer to the param to deallocate memory for
+ */
 static void free_param(Param *param);
 
-static void set_nonce(Builder *builder);
+/**
+ * @brief      Sets the oauth signature.
+ *
+ * @details    The <b>oauth_signature</b> parameter contains a value which
+ * is generated by running all of the other request parameters and two
+ * secret values through a signing algorithm. The purpose of the signature
+ * is so that Twitter can verify that the request has not been modified in transit,
+ * verify the application sending the request, and verify that the application has
+ * authorization to interact with the user’s account.
+ * The process for calculating the oauth_signature for this request is described in
+ * [Creating a signature](https://dev.twitter.com/oauth/overview/creating-signatures)
+ *
+ *
+ * @example    oauth_signature  tnnArxj06cWHq44gCs1OSKk/jLY=
+ *
+ * @param      builder  The builder
+ */
+static void create_signature(Builder *builder);
 
-static void set_signature_method(Builder *builder);
-
-static void set_timestamp(Builder *builder);
-
-static void set_oauth_version(Builder *builder);
-
-static void set_signature(Builder *builder);
-
+/**
+ * @brief      Function for comparing parameters
+ *
+ * @param[in]  v1    The first parameter
+ * @param[in]  v2    The second parameter
+ *
+ * @return     <0 if v1 goes before v2
+ *             0  if vi is equivalent to v2
+ *             >0 if v1 goes after v2
+ */
 static int compare(const void *v1, const void *v2);
 
+/**
+ * @brief      sets the nonce
+ *
+ * @details    The oauth_nonce parameter is a unique token your application
+ * should generate for each unique request. Twitter will use this
+ * value to determine whether a request has been submitted multiple times.
+ * The value for this request was generated by base64 encoding
+ * 32 bytes of random data, and stripping out all non-word characters, but
+ * any approach which produces a relatively random alphanumeric string
+ * should be OK here.
+ *
+ * @example    oauth_nonce  kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg
+ *
+ * @param      builder  The builder
+ * @param[in]  nonce    The nonce
+ */
+void set_nonce(Builder *builder, const char *nonce);
 
-char *
-get_header_string(Builder *builder) {
-    BIO *mem = NULL;
-    BUF_MEM *bptr = NULL;
+/**
+ * @brief      Sets the signature method.
+ *
+ * @details    The <b>oauth_signature_method</b> used by Twitter is <b>HMAC-SHA1</b>.
+ * This value should be used for any authorized request sent to Twitter’s API.
+ *
+ * @example    oauth_signature_method   HMAC-SHA1
+ *
+ * @param      builder    The builder
+ * @param[in]  <unnamed>  { parameter_description }
+ */
+void set_signature_method(Builder *builder, const char *method);
 
-    int count = 0;
+/**
+ * @brief      Sets the timestamp.
+ *
+ * @details    The <b>oauth_timestamp parameter</b> indicates when the request
+ * was created. This value should be the number of seconds since the Unix
+ * epoch at the point the request is generated, and should be easily generated
+ * in most programming languages. Twitter will reject requests which were
+ * created too far in the past, so it is important to keep the clock of the
+ * computer generating requests in sync with NTP.
+ *
+ * @example    oauth_timestamp  1318622958
+ *
+ * @param      builder    The builder
+ * @param[in]  timestamp  The timestamp
+ */
+void set_timestamp(Builder *builder, const char *timestamp);
 
-    set_nonce(builder);
-    set_signature_method(builder);
-    set_timestamp(builder);
-    set_oauth_version(builder);
+/**
+ * @brief      Sets the oauth version.
+ *
+ * @details    The oauth_version parameter should always be 1.0 for any
+ * request sent to the Twitter API.
+ *
+ * @example    oauth_version    1.0
+ *
+ * @param      builder  The builder
+ * @param[in]  version  The version
+ */
+void set_oauth_version(Builder *builder, const char *version);
 
-    /* Done last in order to have the values needed*/
-    set_signature(builder);
+/**
+ * @brief      Gets the nonce.
+ * The returned string must be freed after use
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The nonce.
+ */
+char *get_nonce(const Builder *builder);
 
-    mem = BIO_new(BIO_s_mem());
-    BIO_write(mem, "OAuth ", 6);
-#define X(_, member) count++; \
-    BIO_write(mem, builder->member.encoded_name, strlen(builder->member.encoded_name)); \
-    BIO_write(mem, "=\"", 2); \
-    BIO_write(mem, builder->member.encoded_value, strlen(builder->member.encoded_value)); \
-    BIO_write(mem, "\"", 1); \
-    if (count < OAUTH_MEMBERS_COUNT) { \
-        BIO_write(mem, ", ", 2); \
-    }
+/**
+ * @brief      Gets the oauth version.
+ * The returned string must be freed after use
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The oauth version.
+ */
+char *get_oauth_version(const Builder *builder);
 
-    X_BUILDER_OAUTH_MEMBERS
-#undef X
+/**
+ * @brief      Gets the signature.
+ *
+ * @details    This should be called after all the setters
+ * in order for the properties needed to create the signature to be ready.
+ * Also the returned string must be freed after use
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The signature.
+ */
+char *get_signature(const Builder *builder);
 
-    BIO_get_mem_ptr(mem, bptr);
-    BIO_set_close(mem, BIO_NOCLOSE);
-    BIO_free_all(mem);
+/**
+ * @brief      Gets the signature method.
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The signature method.
+ */
+char *get_signature_method(const Builder *builder);
 
-    return bptr->data;
-}
+/**
+ * @brief      Gets the timestamp.
+ * The returned string must be freed after use
+ *
+ * @param[in]  builder  The builder
+ *
+ * @return     The timestamp.
+ */
+char *get_timestamp(const Builder *builder);
 
 void
 set_consumer_key(Builder *builder, const char *key) {
@@ -210,6 +434,37 @@ set_request_params(Builder *builder, const char **params, int length) {
         builder->request_params[c].encoded_value =
                 curl_encode(builder->request_params[c].value);
     }
+}
+
+void
+set_nonce(Builder *builder, const char *nonce) {
+
+    builder->oauth_nonce.value = oauth_strdup(nonce);
+
+    builder->oauth_nonce.encoded_value = curl_encode(nonce);
+}
+
+void
+set_signature_method(Builder *builder, const char *method) {
+    builder->oauth_signature_method.value = oauth_strdup(method);
+    builder->oauth_signature_method.encoded_value =
+            curl_encode(builder->oauth_signature_method.value);
+}
+
+void
+set_timestamp(Builder *builder, const char *timestamp) {
+    builder->oauth_timestamp.value = oauth_strdup(timestamp);
+
+    builder->oauth_timestamp.encoded_value =
+            curl_encode(builder->oauth_timestamp.value);
+}
+
+void
+set_oauth_version(Builder *builder, const char *version) {
+    builder->oauth_version.value = oauth_strdup(version);
+
+    builder->oauth_version.encoded_value =
+            curl_encode(builder->oauth_version.value);
 }
 
 Builder *
@@ -326,8 +581,6 @@ char *get_token_secret(const Builder *builder) {
     return oauth_strdup(builder->token_secret.value);
 }
 
-#ifdef LOAUTHSIGN_DEBUG
-
 char *get_nonce(const Builder *builder) {
     return oauth_strdup(builder->oauth_nonce.value);
 }
@@ -340,31 +593,78 @@ char *get_signature(const Builder *builder) {
     return oauth_strdup(builder->oauth_signature.value);
 }
 
+char *get_signature_method(const Builder *builder) {
+    return oauth_strdup(builder->oauth_signature_method.value);
+}
+
 char *get_timestamp(const Builder *builder) {
     return oauth_strdup(builder->oauth_timestamp.value);
 }
 
-#endif
+char *get_header_string(Builder *builder) {
+    BIO *mem = NULL;
+    BUF_MEM *bptr = NULL;
+    int count = 0, col, run;
+    char *random_str, timestamp[20];
+    time_t now = time(NULL);
 
-/**
- * @brief      Sets the oauth signature.
- *
- * @details    The <b>oauth_signature</b> parameter contains a value which
- * is generated by running all of the other request parameters and two
- * secret values through a signing algorithm. The purpose of the signature
- * is so that Twitter can verify that the request has not been modified in transit,
- * verify the application sending the request, and verify that the application has
- * authorization to interact with the user’s account.
- * The process for calculating the oauth_signature for this request is described in
- * [Creating a signature](https://dev.twitter.com/oauth/overview/creating-signatures)
- *
- * 
- * @example    oauth_signature  tnnArxj06cWHq44gCs1OSKk/jLY=
- *
- * @param      builder  The builder
- */
+    if (builder->oauth_nonce.value == NULL) {
+        // Nonce
+        random_str = base64_bytes(NULL, 32);
+        for (col = 0, run = 0; random_str[run]; run++) {
+            if (isalnum(random_str[run])) {
+                random_str[col++] = random_str[run];
+            } else {
+                random_str[run] = '\0';
+            }
+        }
+
+        set_nonce(builder, random_str);
+        free(random_str);
+    }
+
+    if (builder->oauth_signature_method.value == NULL) {
+        // Signature method
+        set_signature_method(builder, "HMAC-SHA1");
+    }
+
+    if (builder->oauth_timestamp.value == NULL) {
+        // timestamp
+        (void) snprintf(timestamp, sizeof timestamp, "%ld", (long int) now);
+        set_timestamp(builder, timestamp);
+    }
+
+    if (NULL == builder->oauth_version.value) {
+        // oauth version
+        set_oauth_version(builder, "1.0");
+    }
+
+    // Done last in order to have the values needed
+    create_signature(builder);
+
+    mem = BIO_new(BIO_s_mem());
+    BIO_write(mem, "OAuth ", 6);
+#define X(_, member) count++; \
+    BIO_write(mem, builder->member.encoded_name, strlen(builder->member.encoded_name)); \
+    BIO_write(mem, "=\"", 2); \
+    BIO_write(mem, builder->member.encoded_value, strlen(builder->member.encoded_value)); \
+    BIO_write(mem, "\"", 1); \
+    if (count < OAUTH_MEMBERS_COUNT) { \
+        BIO_write(mem, ", ", 2); \
+    }
+
+    X_BUILDER_OAUTH_MEMBERS
+#undef X
+
+    BIO_get_mem_ptr(mem, &bptr);
+    BIO_set_close(mem, BIO_NOCLOSE);
+    BIO_free_all(mem);
+
+    return bptr->data;
+}
+
 static void
-set_signature(Builder *builder) {
+create_signature(Builder *builder) {
     BUF_MEM *bptr = NULL, *base = NULL, *key = NULL;
     unsigned char sig[SHA_DIGEST_LENGTH] = {0};
 
@@ -372,7 +672,7 @@ set_signature(Builder *builder) {
 
     bptr = collect_parameters(builder);
 
-    base = create_signature_base(builder, bptr->data, bptr->length);
+    base = create_signature_base(builder, bptr->data, (int) bptr->length);
     key = get_signing_key(builder);
 
     /**
@@ -382,7 +682,7 @@ set_signature(Builder *builder) {
      * The output of the HMAC signing function is a binary string. This needs to be base64 encoded
      * to produce the signature string.
      */
-    (void) HMAC(EVP_sha1(), key->data, key->length, (unsigned char *) base->data, base->length, sig,
+    (void) HMAC(EVP_sha1(), key->data, (int) key->length, (unsigned char *) base->data, base->length, sig,
                 (unsigned int *) &len);
 
     builder->oauth_signature.value = base64_bytes(sig, len);
@@ -393,35 +693,6 @@ set_signature(Builder *builder) {
     BUF_MEM_free(bptr);
 }
 
-/**
- * @brief      Gets the signing key.
- *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
- * 
- * @details    The value which identifies your application to Twitter is called the
- * consumer secret and can be found by going to dev.twitter.com/apps and viewing the
- * settings page for your application. This will be the same for every request your
- * application sends.
- * 
- * @example    Consumer secret kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw
- * 
- * The value which identifies the account your application is acting on behalf of is called
- * the oauth token secret. This value can be obtained in several ways, all of which are
- * described at Obtaining access tokens.
- * 
- * @example    OAuth token secret  LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE
- * 
- * Both of these values need to be combined to form a *signing key* which will be used to
- * generate the signature. The signing key is simply the percent encoded consumer secret,
- * followed by an ampersand character ‘&’, followed by the percent encoded token secret
- * 
- * Note that there are some flows, such as when obtaining a request token, where the token
- * secret is not yet known. In this case, the signing key should consist of the [percent
- * encoded](https://dev.twitter.com/oauth/overview/percent-encoding-parameters) *consumer secret* followed by an ampersand character ‘&’.
- *
- * @param[in]  builder  The builder
- *
- * @return     The object holding the signing key
- */
 static BUF_MEM *
 get_signing_key(const Builder *builder) {
     BIO *mem = NULL;
@@ -433,7 +704,7 @@ get_signing_key(const Builder *builder) {
         BIO_write(mem, "&", 1);
         BIO_write(mem, builder->token_secret.encoded_value, strlen(builder->token_secret.encoded_value));
 
-        BIO_get_mem_ptr(mem, bptr);
+        BIO_get_mem_ptr(mem, &bptr);
         BIO_set_close(mem, BIO_NOCLOSE);
         BIO_free_all(mem);
     }
@@ -441,29 +712,6 @@ get_signing_key(const Builder *builder) {
     return bptr;
 }
 
-/**
- * @brief      Gets the parameters
- *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
- *
- * @details    In the HTTP request the parameters are URL encoded, but you should collect
- * the raw values. In addition to the request parameters, every *oauth_** parameter needs to be included
- * in the signature, so collect those too.
- * 
- * 1. Percent encode every key and value that will be signed.
- * 2. Sort the list of parameters alphabetically[1] by encoded key[2].
- *     [2] Note: In case of two parameters with the same encoded key, the
- *     OAuth spec says to continue sorting based on value. However,
- *     Twitter does not accept duplicate keys in API requests.
- * 3. For each key/value pair:
- *     a. Append the encoded key to the output string.
- *     b. Append the ‘=’ character to the output string.
- *     c. Append the encoded value to the output string.
- *     d. If there are more key/value pairs remaining, append a '&' character to the output string.
- *
- * @param[in]  builder  The builder
- *
- * @return     A pointer to a buffer holding the parameter string
- */
 static BUF_MEM *
 collect_parameters(const Builder *builder) {
     BIO *mem = NULL;
@@ -485,10 +733,10 @@ collect_parameters(const Builder *builder) {
     lst[5] = &builder->oauth_version;
 
     for (i = members_cnt; i < size; ++i) {
-        lst[i] = &builder->request_params[i - OAUTH_MEMBERS_COUNT];
+        lst[i] = &builder->request_params[i - members_cnt];
     }
 
-    qsort(lst, (unsigned int) size, sizeof lst[0], compare);
+    qsort(lst, (unsigned int) size, sizeof(Param *), compare);
 
     mem = BIO_new(BIO_s_mem());
     if (mem) {
@@ -501,7 +749,7 @@ collect_parameters(const Builder *builder) {
             }
         }
 
-        BIO_get_mem_ptr(mem, bptr);
+        BIO_get_mem_ptr(mem, &bptr);
         BIO_set_close(mem, BIO_NOCLOSE);
         BIO_free_all(mem);
     }
@@ -511,29 +759,8 @@ collect_parameters(const Builder *builder) {
     return bptr;
 }
 
-/**
- * @brief      Creates a signature base.
- *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
- * 
- * @details    The three values collected so far must be joined to make a single string, from
- * which the signature will be generated. This is called the *signature base* string
- * by the OAuth specification.
- * 
- * To encode the HTTP method, base URL, and parameter string into a single string:
- *     1. Convert the HTTP Method to uppercase and set the output string equal to this value.
- *     2. Append the ‘&’ character to the output string.
- *     3. Percent encode the URL and append it to the output string.
- *     4. Append the ‘&’ character to the output string.
- *     5. Percent encode the parameter string and append it to the output string.
- *
- * @param[in]  builder           The builder
- * @param[in]  parameter_string  The parameter string
- * @param[in]  len               The length
- *
- * @return     A buffer containing the signature base
- */
 static BUF_MEM *
-create_signature_base(const Builder *builder, const char *parameter_string, size_t len) {
+create_signature_base(const Builder *builder, const char *parameter_string, int len) {
     BIO *mem = NULL;
     BUF_MEM *bptr = NULL;
     char *encoded_param = curl_encode_len(parameter_string, len);
@@ -546,7 +773,7 @@ create_signature_base(const Builder *builder, const char *parameter_string, size
         BIO_write(mem, "&", 1);
         BIO_write(mem, encoded_param, strlen(encoded_param));
 
-        BIO_get_mem_ptr(mem, bptr);
+        BIO_get_mem_ptr(mem, &bptr);
         BIO_set_close(mem, BIO_NOCLOSE);
         BIO_free_all(mem);
     }
@@ -556,20 +783,10 @@ create_signature_base(const Builder *builder, const char *parameter_string, size
     return bptr;
 }
 
-/**
- * @brief      Function for comparing parameters
- *
- * @param[in]  v1    The first parameter
- * @param[in]  v2    The second parameter
- *
- * @return     <0 if v1 goes before v2
- *             0  if vi is equivalent to v2
- *             >0 if v1 goes after v2
- */
 static int
 compare(const void *v1, const void *v2) {
-    const Param *p1 = (const Param *) v1;
-    const Param *p2 = (const Param *) v2;
+    const Param *p1 = *(Param *const *) v1;
+    const Param *p2 = *(Param *const *) v2;
     int r = strcmp(p1->encoded_name, p2->encoded_name);
     if (r == 0) /* (r == 0) This should never happen, but just
                    * for the sake of completeness, we will leave this in */
@@ -577,111 +794,6 @@ compare(const void *v1, const void *v2) {
     return r;
 }
 
-/**
- * @brief      Generates random alphanum strings
- * 
- * @details    The oauth_nonce parameter is a unique token your application
- * should generate for each unique request. Twitter will use this 
- * value to determine whether a request has been submitted multiple times.
- * The value for this request was generated by base64 encoding 
- * 32 bytes of random data, and stripping out all non-word characters, but
- * any approach which produces a relatively random alphanumeric string
- * should be OK here.
- * 
- * @example    oauth_nonce  kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg
- *
- * @param      builder  The builder
- */
-static void
-set_nonce(Builder *builder) {
-    char *random_str = base64_bytes(NULL, 32);
-    char *collect = random_str;
-    char *run = random_str;
-    while (*run) {
-        if (isalnum(*run)) {
-            *collect++ = *run;
-        } else {
-            *run = '\0';
-        }
-        ++run;
-    }
-
-    builder->oauth_nonce.value = random_str;
-
-    builder->oauth_nonce.encoded_value = curl_encode(random_str);
-}
-
-/**
- * @brief      Sets the signature method.
- * 
- * @details    The <b>oauth_signature_method</b> used by Twitter is <b>HMAC-SHA1</b>.
- * This value should be used for any authorized request sent to Twitter’s API.
- * 
- * @example    oauth_signature_method   HMAC-SHA1
- *
- * @param      builder  The builder
- */
-static void
-set_signature_method(Builder *builder) {
-    builder->oauth_signature_method.value = oauth_strdup("HMAC-SHA1");
-
-    builder->oauth_signature_method.encoded_value =
-            curl_encode(builder->oauth_signature_method.value);
-}
-
-/**
- * @brief      Sets the timestamp.
- * 
- * @details    The <b>oauth_timestamp parameter</b> indicates when the request
- * was created. This value should be the number of seconds since the Unix
- * epoch at the point the request is generated, and should be easily generated
- * in most programming languages. Twitter will reject requests which were 
- * created too far in the past, so it is important to keep the clock of the
- * computer generating requests in sync with NTP.
- * 
- * @example    oauth_timestamp  1318622958
- *
- * @param      builder  The builder
- */
-static void
-set_timestamp(Builder *builder) {
-    time_t now = time(NULL);
-    char timestamp[20];
-    (void) snprintf(timestamp, sizeof timestamp, "%ld", (long int) now);
-    builder->oauth_timestamp.value = oauth_strdup(timestamp);
-
-    builder->oauth_timestamp.encoded_value =
-            curl_encode(builder->oauth_timestamp.value);
-}
-
-/**
- * @brief      Sets the oauth version.
- * 
- * @details    The oauth_version parameter should always be 1.0 for any
- * request sent to the Twitter API.
- * 
- * @example    oauth_version    1.0
- *
- * @param      builder  The builder
- */
-static void
-set_oauth_version(Builder *builder) {
-    builder->oauth_version.value = oauth_strdup("1.0");
-
-    builder->oauth_version.encoded_value =
-            curl_encode(builder->oauth_version.value);
-}
-
-/**
- * @brief      Creates a base64 encoding of the given input
- *             User is responsible for freeing this array after use
- *
- * @param      src       The input array or NULL
- * @param[in]  src_size  The source size
- *
- * @return     An array containing the base64 encoding of the given src
- * or a randomly generated base64 encoding if src was NULL
- */
 static char *
 base64_bytes(unsigned char *src, int src_size) {
     BIO *b64 = NULL, *mem = NULL;
@@ -690,7 +802,7 @@ base64_bytes(unsigned char *src, int src_size) {
     int freesrc = 0;
 
     if (src == NULL) {
-        src = malloc(src_size);
+        src = malloc((size_t) src_size);
         if (!RAND_bytes(src, src_size)) {
             e_log("The random generator is proving difficult");
             return (char *) NULL;
@@ -737,46 +849,22 @@ base64_bytes(unsigned char *src, int src_size) {
     return bytes;
 }
 
-/**
- * @brief      Creates a copy of a string
- *             User is responsible for freeing this array after use
- *
- * @param[in]  s     The string to copy
- *
- * @return     The copy of the string or null if the copying failed
- */
 static char *
 oauth_strdup(const char *s) {
-    char *dest = NULL;
-    STRDUP_CHECK_ASSIGN(dest, s, (char *) 0);
-    return dest;
+    size_t len = 1 + strlen(s);
+    char *dest = malloc(len);
+    // no need to manually append \0 because strlen stops at that symbol
+    return dest ? memcpy(dest, s, len) : (char *) 0;
 }
 
-/**
- * @brief      percent-encodes a given string
- *             The returned string must be freed after use
- *
- * @param[in]  in      The string to encode
- * @param[in]  length  The length
- * 
- * @return     The percent encoded string
- */
 static char *
-curl_encode_len(const char *in, size_t length) {
+curl_encode_len(const char *in, int length) {
     char *encode = curl_easy_escape(curl, in, length);
     char *out = oauth_strdup(encode);
     curl_free(encode);
     return out;
 }
 
-/**
- * @brief      percent-encodes a given string
- *             The returned string must be freed after use
- *
- * @param[in]  in    The string to encode
- * 
- * @return     The percent encoded string
- */
 static char *
 curl_encode(const char *in) {
     char *encode = curl_easy_escape(curl, in, 0);
@@ -785,17 +873,8 @@ curl_encode(const char *in) {
     return out;
 }
 
-/**
- * @brief      Decodes a given string (opposite of encode)
- *             The returned string must be freed after use
- *
- * @param[in]  in      The encoded string to decode
- * @param[in]  length  The length of the encoded string
- * 
- * @return     A decoded string
- */
 static char *
-curl_decode_len(const char *in, size_t length) {
+curl_decode_len(const char *in, int length) {
     int len;
     char *decode = curl_easy_unescape(curl, in, length, &len);
     char *out = oauth_strdup(decode);
@@ -803,14 +882,6 @@ curl_decode_len(const char *in, size_t length) {
     return out;
 }
 
-/**
- * @brief      Decodes a given string (opposite of encode)
- *             The returned string must be freed after use
- *
- * @param[in]  in      The encoded string to decode
- * 
- * @return     A decoded string
- */
 static char *
 curl_decode(const char *in) {
     int len;
@@ -820,11 +891,6 @@ curl_decode(const char *in) {
     return out;
 }
 
-/**
- * @brief      Helper to free the params of a Builder object
- *
- * @param      param  A pointer to the param to deallocate memory for
- */
 static void
 free_param(Param *param) {
     FREE_IF_NOT_NULL(param->name);
