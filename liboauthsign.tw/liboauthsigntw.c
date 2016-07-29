@@ -601,7 +601,7 @@ char *get_timestamp(const Builder *builder) {
     return oauth_strdup(builder->oauth_timestamp.value);
 }
 
-char *get_header_string(Builder *builder) {
+char *get_authorization_header(Builder *builder) {
     BIO *mem = NULL;
     BUF_MEM *bptr = NULL;
     int count = 0, col, run;
@@ -645,10 +645,7 @@ char *get_header_string(Builder *builder) {
     mem = BIO_new(BIO_s_mem());
     BIO_write(mem, "OAuth ", 6);
 #define X(_, member) count++; \
-    BIO_write(mem, builder->member.encoded_name, strlen(builder->member.encoded_name)); \
-    BIO_write(mem, "=\"", 2); \
-    BIO_write(mem, builder->member.encoded_value, strlen(builder->member.encoded_value)); \
-    BIO_write(mem, "\"", 1); \
+    BIO_printf(mem, "%s=\"%s\"", builder->member.encoded_name, builder->member.encoded_value); \
     if (count < OAUTH_MEMBERS_COUNT) { \
         BIO_write(mem, ", ", 2); \
     }
@@ -661,6 +658,23 @@ char *get_header_string(Builder *builder) {
     BIO_free_all(mem);
 
     return bptr->data;
+}
+
+char *get_cURL_command(Builder *builder) {
+    char *auth_header = get_authorization_header(builder);
+    BIO *mem = BIO_new(BIO_s_mem());
+    BUF_MEM *cc, *params = collect_parameters(builder);
+
+    BIO_printf(mem, "curl --request '%s' --data '%s' --header 'Authorization: %s'",
+               builder->http_method.value, params->data, auth_header);
+
+    BIO_get_mem_ptr(mem, &cc);
+    BIO_set_close(mem, BIO_NOCLOSE);
+    BIO_free(mem);
+    BUF_MEM_free(params);
+    free(auth_header);
+
+    return cc->data;
 }
 
 static void

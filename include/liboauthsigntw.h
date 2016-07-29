@@ -169,12 +169,30 @@ char **get_request_params(const Builder *builder);
 /**
  * @brief      Gets the header string.
  * The returned string must be freed after use
+ * 
+ * @details    This should be the last method called during the build process, therefore
+ * the builder must have been initialized with all the necessary components otherwise
+ * the result of calling this method is undefined and may result in a memory error
+ * 
  *
  * @param      builder  The builder
  *
  * @return     The header string.
  */
-char *get_header_string(Builder *builder);
+char *get_authorization_header(Builder *builder);
+
+/**
+ * @brief      Gets the curl command for executing a request with the header
+ * The returned string must be freed after use
+ * 
+ * @details    Just as with get_authorization_header(Builder *), the necessary components
+ * needed to build the header must be in place before using this method.
+ *
+ * @param      builder  The builder
+ *
+ * @return     The curl command syntax
+ */
+char *get_cURL_command(Builder *builder);
 
 /**
  * @brief      Destroys a builder.

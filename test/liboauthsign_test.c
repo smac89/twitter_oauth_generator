@@ -39,7 +39,7 @@ X_DEFAULT_TESTS
 extern void set_request_params(Builder *builder, const char **params, int length);
 extern char **get_request_params(const Builder *builder);
 
-extern char *get_header_string(Builder *builder);
+extern char *get_authorization_header(Builder *builder);
 
 #undef X
 
@@ -116,7 +116,7 @@ static void test_get_request_params(void **state) {
 static void test_get_header_string(void **state) {
     Builder *builder = *state;
 
-    char *value = get_header_string(builder);
+    char *value = get_authorization_header(builder);
 
     assert_string_equal("OAuth oauth_consumer_key=\"xvz1evFS4wEEPTGEFPHBog\", "
                                 "oauth_nonce=\"kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg\", "
