@@ -38,7 +38,7 @@
 
 #include "logger.h"
 #include <ctype.h>
-#include <liboauthsigntw.h>
+#include <liboauthsign.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
     char *method;
     char *url;
     int paramc;
-    char **paramv;
+    const char **paramv;
     char *result;
     Builder *b = new_oauth_builder();
 

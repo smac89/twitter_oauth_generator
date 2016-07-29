@@ -2,7 +2,6 @@ set(CORELIBS crypto curl oauthsigntw)
 
 set(SOURCE_FILES
         oauth_sign.c
-        ${PROJECT_SOURCE_DIR}/liboauthsigntw.c
         ${PROJECT_SOURCE_DIR}/liboauthsign.c
         ${PROJECT_SOURCE_DIR}/logger.c)
 
