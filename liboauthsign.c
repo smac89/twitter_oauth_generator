@@ -9,9 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
-#include "liboauthsign.h"
-#include "logger.h"
+#include <liboauthsign.h>
+#include <logger.h>
 
 #define FREE_IF_NOT_NULL(obj) \
     do {                      \
