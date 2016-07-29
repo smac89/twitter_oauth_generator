@@ -2,7 +2,8 @@
 ### Helper to generate Authorization headers for Twitter oauth api requests
 ### Originally derived from http://acme.com/software/oauth_sign/
 
-[![Licence](https://img.shields.io/badge/Licence-MIT-blue.svg)](https://github.com/smac89/twitter_oauth_generator/blob/master/LICENSE)
+[![Licence](https://img.shields.io/badge/Licence-MIT-blue.svg)](https://github.com/smac89/twitter_oauth_generator/blob/master/LICENSE) [![CircleCI](https://circleci.com/gh/smac89/twitter_oauth_generator.svg?style=svg&circle-token=f2c9731e54d3e36d83d3c4cf9ae5a5d6a130acd3)](https://circleci.com/gh/smac89/twitter_oauth_generator)
+
 ---
 
                 oauth_sign - generate an OAuth signature
