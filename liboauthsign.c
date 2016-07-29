@@ -1,5 +1,7 @@
 #include <ctype.h>
 #include <curl/curl.h>
+#include <liboauthsign.h>
+#include <logger.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/evp.h>
@@ -9,8 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <liboauthsign.h>
-#include <logger.h>
 
 #define FREE_IF_NOT_NULL(obj) \
     do {                      \
@@ -429,7 +429,7 @@ void set_request_params(Builder *builder, const char **params, int length) {
     size_t d;
     const char *value;
 
-    builder->request_params  = calloc((size_t) length, sizeof(Param));
+    builder->request_params  = calloc(( size_t )length, sizeof(Param));
     builder->req_params_size = length;
 
     /* using strncat because it appends a null terminating character
