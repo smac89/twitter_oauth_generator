@@ -1,0 +1,24 @@
+# See http://clang.llvm.org/docs/ClangFormatStyleOptions.html
+---
+BasedOnStyle: LLVM
+AlignTrailingComments: true
+AlignAfterOpenBracket: Align
+AllowShortIfStatementsOnASingleLine: false
+BreakBeforeBraces: Attach
+ColumnLimit: 0
+IndentWidth: 4
+IndentCaseLabels: true
+KeepEmptyLinesAtTheStartOfBlocks: true
+ReflowComments: true
+---
+Language: Cpp
+SortIncludes: true
+AlignConsecutiveAssignments: true
+MaxEmptyLinesToKeep: 2
+SpacesBeforeTrailingComments: 1
+SpaceAfterCStyleCast: false
+SpacesInCStyleCastParentheses: true
+SpaceBeforeParens: ControlStatements
+TabWidth: 4
+UseTab: Never
+---

@@ -1,20 +1,24 @@
+#include <ctype.h>
+#include <curl/curl.h>
+#include <liboauthsign.h>
+#include <openssl/bio.h>
+#include <openssl/buffer.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/rand.h>
+#include <openssl/sha.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <ctype.h>
-#include <openssl/rand.h>
-#include <openssl/bio.h>
-#include <openssl/evp.h>
-#include <openssl/buffer.h>
-#include <curl/curl.h>
-#include <openssl/hmac.h>
-#include <openssl/sha.h>
-#include <liboauthsign.h>
 
-#include "logger.h"
 #include "liboauthsigntw.h"
+#include "logger.h"
 
-#define FREE_IF_NOT_NULL(obj) do { if ((obj) != NULL) free(obj); } while (0)
+#define FREE_IF_NOT_NULL(obj) \
+    do {                      \
+        if ((obj) != NULL)    \
+            free(obj);        \
+    } while (0)
 
 /**
  * This is an X-MACRO which helps in reducing the amount of time
@@ -25,14 +29,14 @@
  *
  * @example    Examples of using these can be found in the code
  */
-#define X_BUILDER_OAUTH_MEMBERS \
-    X(Param,  oauth_consumer_key) \
-    X(Param,  oauth_nonce) \
-    X(Param,  oauth_signature) \
-    X(Param,  oauth_signature_method) \
-    X(Param,  oauth_timestamp) \
-    X(Param,  oauth_token) \
-    X(Param,  oauth_version)
+#define X_BUILDER_OAUTH_MEMBERS      \
+    X(Param, oauth_consumer_key)     \
+    X(Param, oauth_nonce)            \
+    X(Param, oauth_signature)        \
+    X(Param, oauth_signature_method) \
+    X(Param, oauth_timestamp)        \
+    X(Param, oauth_token)            \
+    X(Param, oauth_version)
 
 /**
  * @brief      This X function is used to count the number of members
@@ -128,52 +132,50 @@ static char *curl_decode_len(const char *in, int length);
 static char *curl_decode(const char *in);
 
 /**
- * @brief      Creates a signature base.
- *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
+ * @brief      Gets the request parameters as a string.
  *
- * @details    The three values collected so far must be joined to make a single string, from
- * which the signature will be generated. This is called the *signature base* string
- * by the OAuth specification.
+ * @param[in]  builder  The builder
  *
- * To encode the HTTP method, base URL, and parameter string into a single string:
- *     1. Convert the HTTP Method to uppercase and set the output string equal to this value.
- *     2. Append the ‘&’ character to the output string.
- *     3. Percent encode the URL and append it to the output string.
- *     4. Append the ‘&’ character to the output string.
- *     5. Percent encode the parameter string and append it to the output string.
- *
- * @param[in]  builder           The builder
- * @param[in]  parameter_string  The parameter string
- * @param[in]  len               The length
- *
- * @return     A buffer containing the signature base
+ * @return     The request parameter string.
  */
-static BUF_MEM *create_signature_base(const Builder *builder, const char *parameter_string, int len);
+static char *get_request_param_string(const Builder *builder);
 
 /**
  * @brief      Gets the signing key.
- *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
+ *             The returned BUF_MEM object must be freed by calling
+ * BUF_MEM_free()
  *
- * @details    The value which identifies your application to Twitter is called the
- * consumer secret and can be found by going to dev.twitter.com/apps and viewing the
- * settings page for your application. This will be the same for every request your
+ * @details    The value which identifies your application to Twitter is called
+ * the
+ * consumer secret and can be found by going to dev.twitter.com/apps and viewing
+ * the
+ * settings page for your application. This will be the same for every request
+ * your
  * application sends.
  *
  * @example    Consumer secret kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw
  *
- * The value which identifies the account your application is acting on behalf of is called
- * the oauth token secret. This value can be obtained in several ways, all of which are
+ * The value which identifies the account your application is acting on behalf
+ * of is called
+ * the oauth token secret. This value can be obtained in several ways, all of
+ * which are
  * described at Obtaining access tokens.
  *
  * @example    OAuth token secret  LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE
  *
- * Both of these values need to be combined to form a *signing key* which will be used to
- * generate the signature. The signing key is simply the percent encoded consumer secret,
- * followed by an ampersand character ‘&’, followed by the percent encoded token secret
+ * Both of these values need to be combined to form a *signing key* which will
+ * be used to
+ * generate the signature. The signing key is simply the percent encoded
+ * consumer secret,
+ * followed by an ampersand character ‘&’, followed by the percent encoded token
+ * secret
  *
- * Note that there are some flows, such as when obtaining a request token, where the token
- * secret is not yet known. In this case, the signing key should consist of the [percent
- * encoded](https://dev.twitter.com/oauth/overview/percent-encoding-parameters) *consumer secret* followed by an ampersand character ‘&’.
+ * Note that there are some flows, such as when obtaining a request token, where
+ * the token
+ * secret is not yet known. In this case, the signing key should consist of the
+ * [percent
+ * encoded](https://dev.twitter.com/oauth/overview/percent-encoding-parameters)
+ * *consumer secret* followed by an ampersand character ‘&’.
  *
  * @param[in]  builder  The builder
  *
@@ -183,10 +185,13 @@ static BUF_MEM *get_signing_key(const Builder *builder);
 
 /**
  * @brief      Gets the parameters
- *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
+ *             The returned BUF_MEM object must be freed by calling
+ * BUF_MEM_free()
  *
- * @details    In the HTTP request the parameters are URL encoded, but you should collect
- * the raw values. In addition to the request parameters, every *oauth_** parameter needs to be included
+ * @details    In the HTTP request the parameters are URL encoded, but you
+ * should collect
+ * the raw values. In addition to the request parameters, every *oauth_**
+ * parameter needs to be included
  * in the signature, so collect those too.
  *
  * 1. Percent encode every key and value that will be signed.
@@ -198,7 +203,8 @@ static BUF_MEM *get_signing_key(const Builder *builder);
  *     a. Append the encoded key to the output string.
  *     b. Append the ‘=’ character to the output string.
  *     c. Append the encoded value to the output string.
- *     d. If there are more key/value pairs remaining, append a '&' character to the output string.
+ *     d. If there are more key/value pairs remaining, append a '&' character to
+ * the output string.
  *
  * @param[in]  builder  The builder
  *
@@ -219,11 +225,15 @@ static void free_param(Param *param);
  * @details    The <b>oauth_signature</b> parameter contains a value which
  * is generated by running all of the other request parameters and two
  * secret values through a signing algorithm. The purpose of the signature
- * is so that Twitter can verify that the request has not been modified in transit,
- * verify the application sending the request, and verify that the application has
+ * is so that Twitter can verify that the request has not been modified in
+ * transit,
+ * verify the application sending the request, and verify that the application
+ * has
  * authorization to interact with the user’s account.
- * The process for calculating the oauth_signature for this request is described in
- * [Creating a signature](https://dev.twitter.com/oauth/overview/creating-signatures)
+ * The process for calculating the oauth_signature for this request is described
+ * in
+ * [Creating a
+ * signature](https://dev.twitter.com/oauth/overview/creating-signatures)
  *
  *
  * @example    oauth_signature  tnnArxj06cWHq44gCs1OSKk/jLY=
@@ -242,7 +252,19 @@ static void create_signature(Builder *builder);
  *             0  if vi is equivalent to v2
  *             >0 if v1 goes after v2
  */
-static int compare(const void *v1, const void *v2);
+static int compare_p2p(const void *v1, const void *v2);
+
+/**
+ * @brief      Function to compare Params in an array
+ *
+ * @param[in]  v1    The first param
+ * @param[in]  v2    The second param
+ *
+ * @return     <0 if v1 goes before v2
+ *             0  if vi is equivalent to v2
+ *             >0 if v1 goes after v2
+ */
+static int compare_p(const void *v1, const void *v2);
 
 /**
  * @brief      sets the nonce
@@ -265,7 +287,8 @@ void set_nonce(Builder *builder, const char *nonce);
 /**
  * @brief      Sets the signature method.
  *
- * @details    The <b>oauth_signature_method</b> used by Twitter is <b>HMAC-SHA1</b>.
+ * @details    The <b>oauth_signature_method</b> used by Twitter is
+ * <b>HMAC-SHA1</b>.
  * This value should be used for any authorized request sent to Twitter’s API.
  *
  * @example    oauth_signature_method   HMAC-SHA1
@@ -357,120 +380,108 @@ char *get_signature_method(const Builder *builder);
  */
 char *get_timestamp(const Builder *builder);
 
-void
-set_consumer_key(Builder *builder, const char *key) {
+void set_consumer_key(Builder *builder, const char *key) {
     builder->oauth_consumer_key.value = oauth_strdup(key);
 
     builder->oauth_consumer_key.encoded_value =
-            curl_encode(builder->oauth_consumer_key.value);
+        curl_encode(builder->oauth_consumer_key.value);
 }
 
-void
-set_consumer_secret(Builder *builder, const char *key) {
+void set_consumer_secret(Builder *builder, const char *key) {
     builder->consumer_secret.value = oauth_strdup(key);
 
     builder->consumer_secret.encoded_value =
-            curl_encode(builder->consumer_secret.value);
+        curl_encode(builder->consumer_secret.value);
 }
 
-void
-set_token(Builder *builder, const char *key) {
+void set_token(Builder *builder, const char *key) {
     builder->oauth_token.value = oauth_strdup(key);
 
-    builder->oauth_token.encoded_value =
-            curl_encode(builder->oauth_token.value);
+    builder->oauth_token.encoded_value = curl_encode(builder->oauth_token.value);
 }
 
-void
-set_token_secret(Builder *builder, const char *key) {
+void set_token_secret(Builder *builder, const char *key) {
     builder->token_secret.value = oauth_strdup(key);
 
     builder->token_secret.encoded_value =
-            curl_encode(builder->token_secret.value);
+        curl_encode(builder->token_secret.value);
 }
 
-void
-set_http_method(Builder *builder, const char *key) {
+void set_http_method(Builder *builder, const char *key) {
     builder->http_method.value = oauth_strdup(key);
 
-    builder->http_method.encoded_value =
-            curl_encode(builder->http_method.value);
+    builder->http_method.encoded_value = curl_encode(builder->http_method.value);
 }
 
-void
-set_base_url(Builder *builder, const char *key) {
+void set_base_url(Builder *builder, const char *key) {
     builder->base_url.value = oauth_strdup(key);
 
-    builder->base_url.encoded_value =
-            curl_encode(builder->base_url.value);
+    builder->base_url.encoded_value = curl_encode(builder->base_url.value);
 }
 
-void
-set_request_params(Builder *builder, const char **params, int length) {
+void set_request_params(Builder *builder, const char **params, int length) {
     int c;
     size_t d;
     const char *value;
 
-    builder->request_params = malloc(sizeof(Param) * length);
+    builder->request_params  = malloc(sizeof(Param) * length);
     builder->req_params_size = length;
 
     /* using strncat because it appends a null terminating character
-    at the end of the string */
+  at the end of the string */
     for (c = 0; c < length; ++c) {
-        d = strcspn(params[c], "=");
-        builder->request_params[c].name = malloc(d);
+        d                                  = strcspn(params[c], "=");
+        builder->request_params[c].name    = malloc(d);
         builder->request_params[c].name[0] = '\0';
         strncat(builder->request_params[c].name, params[c], d);
 
         builder->request_params[c].encoded_name =
-                curl_encode(builder->request_params[c].name);
+            curl_encode(builder->request_params[c].name);
 
-        value = &params[c][d + 1];
-        d = strlen(value);
-        builder->request_params[c].value = malloc(d);
+        value                               = &params[c][d + 1];
+        d                                   = strlen(value);
+        builder->request_params[c].value    = malloc(d);
         builder->request_params[c].value[0] = '\0';
         strncat(builder->request_params[c].value, value, d);
 
         builder->request_params[c].encoded_value =
-                curl_encode(builder->request_params[c].value);
+            curl_encode(builder->request_params[c].value);
     }
+
+    qsort(builder->request_params, length, sizeof builder->request_params[0],
+          compare_p);
 }
 
-void
-set_nonce(Builder *builder, const char *nonce) {
+void set_nonce(Builder *builder, const char *nonce) {
 
     builder->oauth_nonce.value = oauth_strdup(nonce);
 
     builder->oauth_nonce.encoded_value = curl_encode(nonce);
 }
 
-void
-set_signature_method(Builder *builder, const char *method) {
+void set_signature_method(Builder *builder, const char *method) {
     builder->oauth_signature_method.value = oauth_strdup(method);
     builder->oauth_signature_method.encoded_value =
-            curl_encode(builder->oauth_signature_method.value);
+        curl_encode(builder->oauth_signature_method.value);
 }
 
-void
-set_timestamp(Builder *builder, const char *timestamp) {
+void set_timestamp(Builder *builder, const char *timestamp) {
     builder->oauth_timestamp.value = oauth_strdup(timestamp);
 
     builder->oauth_timestamp.encoded_value =
-            curl_encode(builder->oauth_timestamp.value);
+        curl_encode(builder->oauth_timestamp.value);
 }
 
-void
-set_oauth_version(Builder *builder, const char *version) {
+void set_oauth_version(Builder *builder, const char *version) {
     builder->oauth_version.value = oauth_strdup(version);
 
     builder->oauth_version.encoded_value =
-            curl_encode(builder->oauth_version.value);
+        curl_encode(builder->oauth_version.value);
 }
 
-Builder *
-new_oauth_builder(void) {
+Builder *new_oauth_builder(void) {
     Builder *builder = malloc(sizeof(Builder));
-    Builder temp = {
+    Builder temp     = {
 
 /**
  * @brief      This X function initializes some of the struct members
@@ -478,15 +489,14 @@ new_oauth_builder(void) {
  * @param      member  The name of the member
  */
 #define X(_, member) {#member, NULL, NULL, NULL},
-            X_BUILDER_OAUTH_MEMBERS
+        X_BUILDER_OAUTH_MEMBERS
 #undef X
-            {NULL, NULL, NULL, NULL},
-            {NULL, NULL, NULL, NULL},
-            {NULL, NULL, NULL, NULL},
-            {NULL, NULL, NULL, NULL},
-            NULL,
-            0
-    };
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        {NULL, NULL, NULL, NULL},
+        NULL,
+        0};
 
 /**
  * @brief      This X function percent-encodes some of the struct members
@@ -506,8 +516,7 @@ new_oauth_builder(void) {
     return builder;
 }
 
-void
-destroy_builder(Builder **builder) {
+void destroy_builder(Builder **builder) {
 
     if (*builder != NULL && BUILDER_REF_COUNT > 0) {
         Builder *ref = *builder;
@@ -562,9 +571,9 @@ char **get_request_params(const Builder *builder) {
     int c;
     size_t nsize;
     for (c = 0; c < builder->req_params_size; ++c) {
-        ptr = &builder->request_params[c];
-        nsize = strlen(ptr->name);
-        params[c] = malloc(nsize + strlen(ptr->value) + 2);
+        ptr          = &builder->request_params[c];
+        nsize        = strlen(ptr->name);
+        params[c]    = malloc(nsize + strlen(ptr->value) + 2);
         params[c][0] = '\0';
         strcat(params[c], ptr->name);
         strcat(&params[c][nsize], "=");
@@ -602,9 +611,9 @@ char *get_timestamp(const Builder *builder) {
 }
 
 char *get_authorization_header(Builder *builder) {
-    BIO *mem = NULL;
+    BIO *mem      = NULL;
     BUF_MEM *bptr = NULL;
-    int count = 0, col, run;
+    int count     = 0, col, run;
     char *random_str, timestamp[20];
     time_t now = time(NULL);
 
@@ -630,7 +639,7 @@ char *get_authorization_header(Builder *builder) {
 
     if (builder->oauth_timestamp.value == NULL) {
         // timestamp
-        (void) snprintf(timestamp, sizeof timestamp, "%ld", (long int) now);
+        ( void )snprintf(timestamp, sizeof timestamp, "%ld", ( long int )now);
         set_timestamp(builder, timestamp);
     }
 
@@ -644,10 +653,12 @@ char *get_authorization_header(Builder *builder) {
 
     mem = BIO_new(BIO_s_mem());
     BIO_write(mem, "OAuth ", 6);
-#define X(_, member) count++; \
-    BIO_printf(mem, "%s=\"%s\"", builder->member.encoded_name, builder->member.encoded_value); \
-    if (count < OAUTH_MEMBERS_COUNT) { \
-        BIO_write(mem, ", ", 2); \
+#define X(_, member)                                           \
+    count++;                                                   \
+    BIO_printf(mem, "%s=\"%s\"", builder->member.encoded_name, \
+               builder->member.encoded_value);                 \
+    if (count < OAUTH_MEMBERS_COUNT) {                         \
+        BIO_write(mem, ", ", 2);                               \
     }
 
     X_BUILDER_OAUTH_MEMBERS
@@ -662,61 +673,97 @@ char *get_authorization_header(Builder *builder) {
 
 char *get_cURL_command(Builder *builder) {
     char *auth_header = get_authorization_header(builder);
-    BIO *mem = BIO_new(BIO_s_mem());
-    BUF_MEM *cc, *params = collect_parameters(builder);
+    BIO *mem          = BIO_new(BIO_s_mem());
+    BUF_MEM *cc;
+    int c;
 
-    BIO_printf(mem, "curl --request '%s' --data '%s' --header 'Authorization: %s'",
-               builder->http_method.value, params->data, auth_header);
+    BIO_printf(mem, "curl --request '%s' '%s' --data '",
+               builder->http_method.value, builder->base_url.value);
+
+    for (c = 0; c < builder->req_params_size; ++c) {
+        BIO_printf(mem, c == 0 ? "%s=%s" : "&%s=%s",
+                   builder->request_params[c].name,
+                   builder->request_params[c].value);
+    }
+
+    BIO_printf(mem, "' --header 'Authorization: %s' --verbose", auth_header);
+    BIO_write(mem, "\0", 1);
 
     BIO_get_mem_ptr(mem, &cc);
     BIO_set_close(mem, BIO_NOCLOSE);
-    BIO_free(mem);
-    BUF_MEM_free(params);
+    BIO_free_all(mem);
     free(auth_header);
 
     return cc->data;
 }
 
-static void
-create_signature(Builder *builder) {
-    BUF_MEM *bptr = NULL, *base = NULL, *key = NULL;
+char *get_signature_base(const Builder *builder) {
+    BIO *mem      = NULL;
+    BUF_MEM *bptr = NULL, *params = collect_parameters(builder);
+
+    char *encoded_param = curl_encode_len(params->data, ( int )params->length);
+
+    mem = BIO_new(BIO_s_mem());
+    if (mem) {
+        BIO_write(mem, builder->http_method.value,
+                  ( int )strlen(builder->http_method.value));
+        BIO_write(mem, "&", 1);
+        BIO_write(mem, builder->base_url.encoded_value,
+                  ( int )strlen(builder->base_url.encoded_value));
+        BIO_write(mem, "&", 1);
+        BIO_write(mem, encoded_param, ( int )strlen(encoded_param));
+        BIO_write(mem, "\0", 1);
+
+        BIO_get_mem_ptr(mem, &bptr);
+        BIO_set_close(mem, BIO_NOCLOSE);
+        BIO_free_all(mem);
+    }
+
+    free(encoded_param);
+    BUF_MEM_free(params);
+
+    return bptr->data;
+}
+
+static void create_signature(Builder *builder) {
+    BUF_MEM *bptr = NULL, *key = NULL;
     unsigned char sig[SHA_DIGEST_LENGTH] = {0};
+    char *base;
 
     int len;
 
-    bptr = collect_parameters(builder);
-
-    base = create_signature_base(builder, bptr->data, (int) bptr->length);
-    key = get_signing_key(builder);
+    base = get_signature_base(builder);
+    key  = get_signing_key(builder);
 
     /**
-     * Finally, the signature is calculated by passing the signature base string and signing key to the
-     * HMAC-SHA1 hashing algorithm.
-     *
-     * The output of the HMAC signing function is a binary string. This needs to be base64 encoded
-     * to produce the signature string.
-     */
-    (void) HMAC(EVP_sha1(), key->data, (int) key->length, (unsigned char *) base->data, base->length, sig,
-                (unsigned int *) &len);
+   * Finally, the signature is calculated by passing the signature base string
+   * and signing key to the
+   * HMAC-SHA1 hashing algorithm.
+   *
+   * The output of the HMAC signing function is a binary string. This needs to
+   * be base64 encoded
+   * to produce the signature string.
+   */
+    ( void )HMAC(EVP_sha1(), key->data, ( int )key->length, ( unsigned char * )base,
+                 strlen(base), sig, ( unsigned int * )&len);
 
     builder->oauth_signature.value = base64_bytes(sig, len);
-    builder->oauth_signature.encoded_value = curl_encode(builder->oauth_signature.value);
+    builder->oauth_signature.encoded_value =
+        curl_encode(builder->oauth_signature.value);
 
     BUF_MEM_free(key);
-    BUF_MEM_free(base);
     BUF_MEM_free(bptr);
+    free(base);
 }
 
-static BUF_MEM *
-get_signing_key(const Builder *builder) {
-    BIO *mem = NULL;
+static BUF_MEM *get_signing_key(const Builder *builder) {
+    BIO *mem      = NULL;
     BUF_MEM *bptr = NULL;
 
     mem = BIO_new(BIO_s_mem());
     if (mem) {
-        BIO_write(mem, builder->consumer_secret.encoded_value, strlen(builder->consumer_secret.encoded_value));
-        BIO_write(mem, "&", 1);
-        BIO_write(mem, builder->token_secret.encoded_value, strlen(builder->token_secret.encoded_value));
+        BIO_printf(mem, "%s&%s", builder->consumer_secret.encoded_value,
+                   builder->token_secret.encoded_value);
 
         BIO_get_mem_ptr(mem, &bptr);
         BIO_set_close(mem, BIO_NOCLOSE);
@@ -726,18 +773,18 @@ get_signing_key(const Builder *builder) {
     return bptr;
 }
 
-static BUF_MEM *
-collect_parameters(const Builder *builder) {
-    BIO *mem = NULL;
-    BUF_MEM *bptr = NULL;
-    int members_cnt = OAUTH_MEMBERS_COUNT - 1; /* -1 because we don't use oauth_signature here */
+static BUF_MEM *collect_parameters(const Builder *builder) {
+    BIO *mem        = NULL;
+    BUF_MEM *bptr   = NULL;
+    int members_cnt = OAUTH_MEMBERS_COUNT -
+                      1; /* -1 because we don't use oauth_signature here */
     int size = members_cnt + builder->req_params_size, i;
 
     const Param **lst = malloc(sizeof(Param *) * size);
 
     /* Didn't use X-functions here because we don't have
-     oauth_signature yet
-     */
+   oauth_signature yet
+   */
 
     lst[0] = &builder->oauth_consumer_key;
     lst[1] = &builder->oauth_nonce;
@@ -750,17 +797,18 @@ collect_parameters(const Builder *builder) {
         lst[i] = &builder->request_params[i - members_cnt];
     }
 
-    qsort(lst, (unsigned int) size, sizeof(Param *), compare);
+    qsort(lst, ( unsigned int )size, sizeof(Param *), compare_p2p);
 
     mem = BIO_new(BIO_s_mem());
     if (mem) {
         for (i = 0; i < size; ++i) {
-            (void) BIO_write(mem, lst[i]->encoded_name, strlen(lst[i]->encoded_name));
-            (void) BIO_write(mem, "=", 1);
-            (void) BIO_write(mem, lst[i]->encoded_value, strlen(lst[i]->encoded_value));
-            if (i + 1 < size) {
-                (void) BIO_write(mem, "&", 1);
+            if (i != 0) {
+                ( void )BIO_write(mem, "&", 1);
             }
+            ( void )BIO_write(mem, lst[i]->encoded_name, strlen(lst[i]->encoded_name));
+            ( void )BIO_write(mem, "=", 1);
+            ( void )BIO_write(mem, lst[i]->encoded_value,
+                              strlen(lst[i]->encoded_value));
         }
 
         BIO_get_mem_ptr(mem, &bptr);
@@ -773,53 +821,59 @@ collect_parameters(const Builder *builder) {
     return bptr;
 }
 
-static BUF_MEM *
-create_signature_base(const Builder *builder, const char *parameter_string, int len) {
-    BIO *mem = NULL;
-    BUF_MEM *bptr = NULL;
-    char *encoded_param = curl_encode_len(parameter_string, len);
-
-    mem = BIO_new(BIO_s_mem());
-    if (mem) {
-        BIO_write(mem, builder->http_method.value, strlen(builder->http_method.value));
-        BIO_write(mem, "&", 1);
-        BIO_write(mem, builder->base_url.encoded_value, strlen(builder->base_url.encoded_value));
-        BIO_write(mem, "&", 1);
-        BIO_write(mem, encoded_param, strlen(encoded_param));
-
-        BIO_get_mem_ptr(mem, &bptr);
-        BIO_set_close(mem, BIO_NOCLOSE);
-        BIO_free_all(mem);
+static char *get_request_param_string(const Builder *builder) {
+    char **params  = get_request_params(builder);
+    char *string   = NULL;
+    int size       = builder->req_params_size, c;
+    size_t bufflen = 0, bts = 0;
+    for (c = 0; c < size; ++c) {
+        bufflen += strlen(params[c]) + 1;
     }
 
-    free(encoded_param);
+    string  = malloc(bufflen);
+    *string = '\0';
+    for (c = 0; c < size; ++c) {
+        if (c != 0) {
+            strcat(&string[bts], "&");
+        }
+        strcat(&string[bts], params[c]);
+        bts += strlen(params[c]);
+    }
 
-    return bptr;
+    return string;
 }
 
-static int
-compare(const void *v1, const void *v2) {
-    const Param *p1 = *(Param *const *) v1;
-    const Param *p2 = *(Param *const *) v2;
-    int r = strcmp(p1->encoded_name, p2->encoded_name);
+static int compare_p2p(const void *v1, const void *v2) {
+    const Param *p1 = *( Param * const * )v1;
+    const Param *p2 = *( Param * const * )v2;
+    int r           = strcmp(p1->encoded_name, p2->encoded_name);
     if (r == 0) /* (r == 0) This should never happen, but just
-                   * for the sake of completeness, we will leave this in */
+               * for the sake of completeness, we will leave this in */
         r = strcmp(p1->encoded_value, p2->encoded_value);
     return r;
 }
 
-static char *
-base64_bytes(unsigned char *src, int src_size) {
+static int compare_p(const void *v1, const void *v2) {
+    const Param *p1 = v1;
+    const Param *p2 = v2;
+    int r           = strcmp(p1->encoded_name, p2->encoded_name);
+    if (r == 0) /* (r == 0) This should never happen, but just
+               * for the sake of completeness, we will leave this in */
+        r = strcmp(p1->encoded_value, p2->encoded_value);
+    return r;
+}
+
+static char *base64_bytes(unsigned char *src, int src_size) {
     BIO *b64 = NULL, *mem = NULL;
     BUF_MEM *bptr = NULL;
-    char *bytes = NULL;
-    int freesrc = 0;
+    char *bytes   = NULL;
+    int freesrc   = 0;
 
     if (src == NULL) {
-        src = malloc((size_t) src_size);
+        src = malloc(( size_t )src_size);
         if (!RAND_bytes(src, src_size)) {
             e_log("The random generator is proving difficult");
-            return (char *) NULL;
+            return ( char * )NULL;
         }
         freesrc = 1;
     }
@@ -827,13 +881,13 @@ base64_bytes(unsigned char *src, int src_size) {
     /*Create a base64 filter/sink*/
     if ((b64 = BIO_new(BIO_f_base64())) == NULL) {
         e_log("Could not create a base64 filter!");
-        return (char *) NULL;
+        return ( char * )NULL;
     }
 
     /*Create a memory source, this is where everything will end up eventually*/
     if ((mem = BIO_new(BIO_s_mem())) == NULL) {
         e_log("Could not allocate storage for the conversion");
-        return (char *) NULL;
+        return ( char * )NULL;
     }
 
     /* Chain them: --> b64 >|> mem */
@@ -863,50 +917,44 @@ base64_bytes(unsigned char *src, int src_size) {
     return bytes;
 }
 
-static char *
-oauth_strdup(const char *s) {
+static char *oauth_strdup(const char *s) {
     size_t len = 1 + strlen(s);
     char *dest = malloc(len);
     // no need to manually append \0 because strlen stops at that symbol
-    return dest ? memcpy(dest, s, len) : (char *) 0;
+    return dest ? memcpy(dest, s, len) : ( char * )0;
 }
 
-static char *
-curl_encode_len(const char *in, int length) {
+static char *curl_encode_len(const char *in, int length) {
     char *encode = curl_easy_escape(curl, in, length);
-    char *out = oauth_strdup(encode);
+    char *out    = oauth_strdup(encode);
     curl_free(encode);
     return out;
 }
 
-static char *
-curl_encode(const char *in) {
+static char *curl_encode(const char *in) {
     char *encode = curl_easy_escape(curl, in, 0);
-    char *out = oauth_strdup(encode);
+    char *out    = oauth_strdup(encode);
     curl_free(encode);
     return out;
 }
 
-static char *
-curl_decode_len(const char *in, int length) {
+static char *curl_decode_len(const char *in, int length) {
     int len;
     char *decode = curl_easy_unescape(curl, in, length, &len);
-    char *out = oauth_strdup(decode);
+    char *out    = oauth_strdup(decode);
     curl_free(decode);
     return out;
 }
 
-static char *
-curl_decode(const char *in) {
+static char *curl_decode(const char *in) {
     int len;
     char *decode = curl_easy_unescape(curl, in, 0, &len);
-    char *out = oauth_strdup(decode);
+    char *out    = oauth_strdup(decode);
     curl_free(decode);
     return out;
 }
 
-static void
-free_param(Param *param) {
+static void free_param(Param *param) {
     FREE_IF_NOT_NULL(param->name);
     FREE_IF_NOT_NULL(param->value);
     FREE_IF_NOT_NULL(param->encoded_name);

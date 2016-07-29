@@ -4,7 +4,7 @@ find_library(CMOCKA_LIBRARY NAMES cmocka)
 add_library(cmocka SHARED IMPORTED)
 set_property(TARGET cmocka PROPERTY IMPORTED_LOCATION "${CMOCKA_LIBRARY}")
 
-add_library(oauthsigntw ${PROJECT_SOURCE_DIR}/liboauthsign.tw/liboauthsigntw.c ${PROJECT_SOURCE_DIR}/logger.c)
+add_library(oauthsigntw ${PROJECT_SOURCE_DIR}/liboauthsigntw.c ${PROJECT_SOURCE_DIR}/logger.c)
 target_link_libraries(oauthsigntw crypto curl oauthsign)
 
 # Create and link the testing file to cmocka

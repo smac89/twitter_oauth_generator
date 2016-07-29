@@ -195,6 +195,27 @@ char *get_authorization_header(Builder *builder);
 char *get_cURL_command(Builder *builder);
 
 /**
+ * @brief      Creates a signature base.
+ *             The returned BUF_MEM object must be freed by calling BUF_MEM_free()
+ *
+ * @details    The three values collected so far must be joined to make a single string, from
+ * which the signature will be generated. This is called the *signature base* string
+ * by the OAuth specification.
+ *
+ * To encode the HTTP method, base URL, and parameter string into a single string:
+ *     1. Convert the HTTP Method to uppercase and set the output string equal to this value.
+ *     2. Append the ‘&’ character to the output string.
+ *     3. Percent encode the URL and append it to the output string.
+ *     4. Append the ‘&’ character to the output string.
+ *     5. Percent encode the parameter string and append it to the output string.
+ *
+ * @param[in]  builder           The builder
+ *
+ * @return     A string containing the signature base
+ */
+char *get_signature_base(const Builder *builder);
+
+/**
  * @brief      Destroys a builder.
  *
  * @param      builder  The builder

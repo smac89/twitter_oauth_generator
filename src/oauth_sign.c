@@ -151,7 +151,7 @@ static int check_method(char *method) {
     char *up = method;
 
     while (*up) {
-        *up = toupper(*up);
+        *up = (char) toupper(*up);
         ++up;
     }
 
