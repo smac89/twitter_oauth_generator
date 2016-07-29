@@ -36,18 +36,18 @@
 ** For commentary on this license please see http://acme.com/license.html
 */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <sysexits.h>
 #include "logger.h"
-#include "liboauthsign.h"
+#include <ctype.h>
+#include <liboauthsigntw.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sysexits.h>
 
 
 static void usage(void);
-
 static int check_method(char *method);
+//static void exit_safe(void);
 
 static char *program_name;
 
@@ -55,6 +55,7 @@ int main(int argc, char **argv) {
     int argn;
     int query_mode;
     int show_sbs;
+    int show_curl;
     char *consumer_key;
     char *consumer_key_secret;
     char *token;
@@ -64,26 +65,30 @@ int main(int argc, char **argv) {
     int paramc;
     char **paramv;
     char *result;
+    Builder *b = new_oauth_builder();
 
     /* Figure out the program's name. */
     {
         program_name = strrchr(argv[0], '/');
-        if (program_name != (char *) 0)
+        if (program_name != ( char * )0)
             ++program_name;
         else
             program_name = argv[0];
     }
 
     /* Get flags. */
-    argn = 1;
+    argn       = 1;
     query_mode = 0;
-    show_sbs = 0;
+    show_sbs   = 0;
+    show_curl  = 0;
     while (argn < argc && argv[argn][0] == '-' && argv[argn][1] != '\0') {
         if (strcmp(argv[argn], "-q") == 0)
             query_mode = 1;
         else if (strcmp(argv[argn], "-b") == 0)
             show_sbs = 1;
-        else
+        else if (strcmp(argv[argn], "-cc") == 0) {
+            show_curl = 1;
+        } else
             usage();
         ++argn;
     }
@@ -93,11 +98,11 @@ int main(int argc, char **argv) {
         usage();
     }
 
-    consumer_key = argv[argn++];
+    consumer_key        = argv[argn++];
     consumer_key_secret = argv[argn++];
-    token = argv[argn++];
-    token_secret = argv[argn++];
-    method = argv[argn++];
+    token               = argv[argn++];
+    token_secret        = argv[argn++];
+    method              = argv[argn++];
 
     /***********************************************/
     /*char *url = strtok(oauth_strdup(key), "?#");*/
@@ -117,41 +122,53 @@ int main(int argc, char **argv) {
         exit(EX_USAGE);
     }
 
-    if (show_sbs) {
-        oauth_show_sbs();
-    }
 
-    /*
-        Builder *b = new_oauth_builder();
-        set_consumer_key(b, "Hello");
-        destroy_builder(&b);
-     */
+    set_consumer_key(b, consumer_key);
+    set_consumer_secret(b, consumer_key_secret);
+    set_token(b, token);
+    set_token_secret(b, token_secret);
+    set_http_method(b, method);
+    set_base_url(b, url);
+    set_request_params(b, paramv, paramc);
 
-    result = oauth_sign(query_mode, consumer_key, consumer_key_secret, token, token_secret, method, url, paramc,
-                        paramv);
-
-    if (result == (char *) 0) {
+    result = get_authorization_header(b);
+    if (result == ( char * )0) {
         e_log("%s: signing failed\n", program_name);
+        destroy_builder(&b);
         exit(EX_SOFTWARE);
     }
 
-    (void) printf("%s\n", result);
+    puts(result);
+    puts("");
     free(result);
+
+    if (show_sbs) {
+        result = get_signature_base(b);
+        puts(result);
+        puts("");
+        free(result);
+    } else if (show_curl) {
+        result = get_cURL_command(b);
+        puts(result);
+        puts("");
+        free(result);
+    }
+
+    destroy_builder(&b);
 
     exit(EX_OK);
 }
 
 static int check_method(char *method) {
     static const char *methods[] = {
-            "GET", "POST", "DELETE",
-            "PUT", "HEAD"
-    };
+        "GET", "POST", "DELETE",
+        "PUT", "HEAD"};
 
     int valid = 0, size = sizeof methods, cnt;
     char *up = method;
 
     while (*up) {
-        *up = (char) toupper(*up);
+        *up = ( char )toupper(*up);
         ++up;
     }
 
@@ -167,8 +184,9 @@ static int check_method(char *method) {
 
 static void usage(void) {
     e_log("usage:  %s [-q|-b] "
-                  "<consumer_key> <consumer_key_secret> "
-                  "<token> <token_secret> <method< <url> "
-                  "[name=value ...]\n", program_name);
+          "<consumer_key> <consumer_key_secret> "
+          "<token> <token_secret> <method< <url> "
+          "[name=value ...]\n",
+          program_name);
     exit(EX_USAGE);
 }

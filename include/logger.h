@@ -1,6 +1,7 @@
 #ifndef OAUTH_LOGGER
 #define OAUTH_LOGGER
 
+#include <stdio.h>
 //#include <string.h>
 //#define __FILENAME__ ((strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__))
 //

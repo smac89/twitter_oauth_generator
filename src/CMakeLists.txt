@@ -1,4 +1,4 @@
-set(CORELIBS crypto curl oauthsign)
+set(CORELIBS crypto curl oauthsigntw)
 
 set(SOURCE_FILES
         oauth_sign.c

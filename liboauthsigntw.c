@@ -424,7 +424,7 @@ void set_request_params(Builder *builder, const char **params, int length) {
     size_t d;
     const char *value;
 
-    builder->request_params  = malloc(sizeof(Param) * length);
+    builder->request_params  = calloc((size_t) length, sizeof(Param));
     builder->req_params_size = length;
 
     /* using strncat because it appends a null terminating character
@@ -488,7 +488,7 @@ Builder *new_oauth_builder(void) {
  *
  * @param      member  The name of the member
  */
-#define X(_, member) {#member, NULL, NULL, NULL},
+#define X(_, member) {oauth_strdup(#member), NULL, NULL, NULL},
         X_BUILDER_OAUTH_MEMBERS
 #undef X
         {NULL, NULL, NULL, NULL},
@@ -663,6 +663,8 @@ char *get_authorization_header(Builder *builder) {
 
     X_BUILDER_OAUTH_MEMBERS
 #undef X
+
+    BIO_write(mem, "\0", 1);
 
     BIO_get_mem_ptr(mem, &bptr);
     BIO_set_close(mem, BIO_NOCLOSE);
@@ -956,9 +958,13 @@ static char *curl_decode(const char *in) {
 
 static void free_param(Param *param) {
     FREE_IF_NOT_NULL(param->name);
+    param->name = NULL;
     FREE_IF_NOT_NULL(param->value);
+    param->value = NULL;
     FREE_IF_NOT_NULL(param->encoded_name);
+    param->encoded_name = NULL;
     FREE_IF_NOT_NULL(param->encoded_value);
+    param->encoded_value = NULL;
 }
 
 /* Example of using curl to send POST request with params

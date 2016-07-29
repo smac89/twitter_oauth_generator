@@ -7,9 +7,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -std=c99 -pedantic -g -U__STRICT_ANSI__ \
 -Wno-missing-field-initializers -Wno-long-long -Wswitch-default -Wshadow -Wunreachable-code \
 -Wold-style-definition")
 
-add_library(oauthsign STATIC liboauthsign.c)
-add_library(oauthsigntw_static liboauthsigntw.c logger.c)
-target_link_libraries(oauthsigntw_static crypto curl oauthsign)
+add_library(oauthsigntw liboauthsigntw.c logger.c)
+target_link_libraries(oauthsigntw crypto curl)
 
 include_directories(include)
 
