@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 2.8)
 project(oauth_sign)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O -std=c99 -pedantic -g -U__STRICT_ANSI__ \
