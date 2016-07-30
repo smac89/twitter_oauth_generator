@@ -6,7 +6,7 @@
 // Wait for the page to load first
 window.onload = function() {
   console.log("WE ARE IN!!!!");
-  var a = document.getElementById("ci");
+  var a = document.getElementById("user-content-ci");
 
   a.onclick = function() {
     console.log("Opening: " + url + " in a new tab/window!");
