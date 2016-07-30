@@ -2,15 +2,22 @@
 ### Helper to generate Authorization headers for Twitter oauth api requests
 ### Originally derived from http://acme.com/software/oauth_sign/
 
-<script>
-function OpenInNewTab(url) {
-  console.log("Opening: " + url + " in a new tab/window!");
-  var win = window.open(url, '_blank');
-  win.focus();
+<script type="text/javascript">
+// Wait for the page to load first
+window.onload = function() {
+  console.log("WE ARE IN!!!!");
+  var a = document.getElementById("ci");
+
+  a.onclick = function() {
+    console.log("Opening: " + url + " in a new tab/window!");
+    var win = window.open(url, '_blank');
+    win.focus();
+    return false;
+  }
 }
 </script>
 
-[![Licence](https://img.shields.io/badge/Licence-MIT-blue.svg)](https://github.com/smac89/twitter_oauth_generator/blob/master/LICENSE) <span onclick="OpenInNewTab();"><a href="https://circleci.com/gh/smac89/twitter_oauth_generator" target="_blank"><img src="https://circleci.com/gh/smac89/twitter_oauth_generator.svg?style=svg&circle-token=f2c9731e54d3e36d83d3c4cf9ae5a5d6a130acd3"/></a></span>
+[![Licence](https://img.shields.io/badge/Licence-MIT-blue.svg)](https://github.com/smac89/twitter_oauth_generator/blob/master/LICENSE) <a id="ci" href="https://circleci.com/gh/smac89/twitter_oauth_generator"><img src="https://circleci.com/gh/smac89/twitter_oauth_generator.svg?style=svg&circle-token=f2c9731e54d3e36d83d3c4cf9ae5a5d6a130acd3"/></a>
 
 ---
 
