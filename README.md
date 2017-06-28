@@ -49,4 +49,6 @@ Files in this distribution:
     ├── oauth_sign.1
     └── README.md
 
-To build: just run `./configure`
+To build:
+- `chmod configure`
+- `./configure`
